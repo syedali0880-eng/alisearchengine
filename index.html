@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>FINAL SEARCH — HTML + PDF + DOCX CONTENT</title>
+  <style>
+    body{font-family:Arial;margin:50px;background:#000;color:#0f0;line-height:1.8}
+    input{width:100%;padding:22px;font-size:26px;border:3px solid #0f0;border-radius:12px;background:#111;color:#0f0}
+    input:focus{outline:none;background:#222}
+    .r{margin:25px 0;padding:25px;background:#111;border:2px solid #0f0;border-radius:12px}
+    a{color:#0ff;font-size:22px;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .h{background:yellow;color:black;font-weight:bold;padding:2px 6px}
+    .status{color:#0f0;font-size:20px;margin:20px 0}
+  </style>
+</head>
+<body>
+<h1>ULTIMATE OFFLINE SEARCH ENGINE</h1>
+<input id="q" placeholder="Type any word from PDF, DOCX or HTML..." autofocus>
+<div class="status" id="status">Loading files...</div>
+<div id="out"></div>
+
+<!-- PDF.js + mammoth.js for DOCX -->
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs" type="module"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.7.1/mammoth.browser.min.js"></script>
+
+<script type="module">
+  import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs';
+
+  // ADD ALL YOUR FILES HERE
+  const files = [
+    "sql/sample_sql.html",
+    "situat/env_details.html",
+    "team/team.html",
+    "contact.html",
+    "blog.html",
+    "faq.html",
+    "portfolio.html",
+    "careers.html",
+    "downloads/catalog.pdf",        // ← PDF
+    "downloads/test_word.docx",      // ← DOCX
+    // ← add unlimited files here
+  ];
+
+  let docs = [];
+  let loaded = 0;
+
+  files.forEach(async file => {
+    try {
+      const response = await fetch(file);
+      const blob = await response.blob();
+
+      let text = "";
+
+      if (file.endsWith('.pdf')) {
+        const url = URL.createObjectURL(blob);
+        const pdf = await pdfjsLib.getDocument(url).promise;
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          text += content.items.map(item => item.str).join(' ') + ' ';
+        }
+      }
+      else if (file.endsWith('.docx')) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        text = result.value;
+      }
+      else {
+        text = await blob.text();
+        text = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+      }
+
+      docs.push({ path: file, text: text.toLowerCase(), raw: text });
+    } catch (e) {
+      docs.push({ path: file, text: "", raw: "" });
+    }
+
+    loaded++;
+    document.getElementById("status").innerHTML = `Loaded ${loaded}/${files.length} files...`;
+
+    if (loaded === files.length) ready();
+  });
+
+  function ready() {
+    document.getElementById("status").innerHTML = `<b>READY — ${files.length} files fully searchable (HTML + PDF + DOCX)</b>`;
+
+    document.getElementById("q").oninput = () => {
+      const q = document.getElementById("q").value.toLowerCase().trim();
+      const out = document.getElementById("out");
+
+      if (!q) {
+        out.innerHTML = "<div style='color:#888;text-align:center;padding:60px'>Type any word from your files...</div>";
+        return;
+      }
+
+      let results = "";
+      let count = 0;
+
+      docs.forEach(d => {
+        if (d.text.includes(q)) {
+          count++;
+          const i = d.text.indexOf(q);
+          const snippet = d.raw.substring(i - 100, i + 200);
+          const highlighted = snippet.replace(new RegExp(q, "gi"), m => `<span class="h">${m}</span>`);
+          results += `<div class="r">
+            <a href="${d.path}" target="_blank">${d.path}</a><br>
+            ...${highlighted}...
+          </div>`;
+        }
+      });
+
+      out.innerHTML = count 
+        ? `<div style="color:#0ff;margin:20px 0"><b>${count} result${count>1?'s':''} found:</b></div>${results}`
+        : `<div style="color:#f66;text-align:center;padding:80px;font-size:26px">No match for "<b>${q}</b>"</div>`;
+    };
+  }
+</script>
+</body>
+</html>
