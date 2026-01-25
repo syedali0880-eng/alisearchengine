@@ -1,0 +1,341 @@
+Option Explicit
+
+' ===========================================================
+' EXPORTS:
+'   pre_masking
+'   sensitive_data_list
+'   masking
+'   post_masking
+'
+' Into a single XML:
+'   <datamasking_configuration>
+'       <mandatory_cursors>false</mandatory_cursors>
+'       <pre_masking>...</pre_masking>
+'       <sensitive_data_list>...</sensitive_data_list>
+'       <masked_tables>...</masked_tables>
+'       <post_masking>...</post_masking>
+' ===========================================================
+
+Sub ExportAllSheetsToXML_Full()
+
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim xmlDoc As Object
+    Dim rootElem As Object
+    Dim savePath As Variant
+    
+    Dim lastRow As Long, lastCol As Long
+    Dim r As Long, c As Long
+    
+    Dim dict As Object
+    Dim maskDict As Object
+    Dim key As String, k As Variant
+    
+    Dim rec As Collection
+    Dim exclColl As Collection
+    Dim tRec As Collection
+    Dim colList As Collection
+    Dim colRec As Collection
+    
+    Set wb = ThisWorkbook
+    
+    ' Ask user where to save XML
+    savePath = Application.GetSaveAsFilename( _
+        InitialFileName:="datamasking_configuration.xml", _
+        FileFilter:="XML Files (*.xml), *.xml")
+    If savePath = False Then Exit Sub
+    
+    ' Prepare XML DOM
+    Set xmlDoc = CreateObject("MSXML2.DOMDocument.6.0")
+    xmlDoc.async = False
+    xmlDoc.preserveWhiteSpace = False
+    xmlDoc.appendChild xmlDoc.createProcessingInstruction( _
+        "xml", "version='1.0' encoding='UTF-8' standalone='yes'")
+    
+    ' Root node
+    Set rootElem = xmlDoc.createElement("datamasking_configuration")
+    xmlDoc.appendChild rootElem
+    
+    ' -------------------------------------------------------
+    ' MANDATORY CURSORS
+    ' -------------------------------------------------------
+    Dim commonElem As Object
+    Set commonElem = xmlDoc.createElement("mandatory_cursors")
+    commonElem.Text = "false"
+    rootElem.appendChild commonElem
+    
+    ' -------------------------------------------------------
+    ' PRE-MASKING
+    ' -------------------------------------------------------
+    On Error Resume Next
+    Set ws = wb.Worksheets("pre_masking")
+    On Error GoTo 0
+    
+    If Not ws Is Nothing Then
+        
+        Dim preElem As Object
+        Set preElem = xmlDoc.createElement("pre_masking")
+        rootElem.appendChild preElem
+        
+        lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        
+        For r = 2 To lastRow
+            
+            If Len(Trim(ws.Cells(r, 2).Value & "")) > 0 Then
+            
+                Dim scriptElem As Object
+                Set scriptElem = xmlDoc.createElement("script")
+                
+                scriptElem.Text = ws.Cells(r, 2).Value
+                
+                If Len(Trim(ws.Cells(r, 3).Value & "")) > 0 Then _
+                    scriptElem.setAttribute "title", ws.Cells(r, 3).Value
+                If Len(Trim(ws.Cells(r, 4).Value & "")) > 0 Then _
+                    scriptElem.setAttribute "db_id", ws.Cells(r, 4).Value
+                
+                preElem.appendChild scriptElem
+            End If
+            
+        Next r
+        
+    End If
+    
+    Set ws = Nothing
+    
+    ' -------------------------------------------------------
+    ' SENSITIVE DATA LIST
+    ' -------------------------------------------------------
+    On Error Resume Next
+    Set ws = wb.Worksheets("sensitive_data_list")
+    On Error GoTo 0
+    
+    If Not ws Is Nothing Then
+        
+        Dim sensElem As Object
+        Set sensElem = xmlDoc.createElement("sensitive_data_list")
+        rootElem.appendChild sensElem
+        
+        lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+        
+        Set dict = CreateObject("Scripting.Dictionary")
+        
+        For r = 2 To lastRow
+            
+            key = Trim(ws.Cells(r, 2).Value & "") & "|" & _
+                  Trim(ws.Cells(r, 3).Value & "") & "|" & _
+                  Trim(ws.Cells(r, 4).Value & "") & "|" & _
+                  Trim(ws.Cells(r, 5).Value & "")
+            
+            ' Skip empty rows
+            If Len(Replace(key, "|", "")) = 0 Then GoTo ContinueSensitiveLoop
+            
+            If Not dict.Exists(key) Then
+                Set rec = New Collection
+                rec.Add Trim(ws.Cells(r, 2).Value & "") ' db_id
+                rec.Add Trim(ws.Cells(r, 3).Value & "") ' id
+                rec.Add Trim(ws.Cells(r, 4).Value & "") ' table_name
+                rec.Add Trim(ws.Cells(r, 5).Value & "") ' col_name
+                rec.Add Trim(ws.Cells(r, 6).Value & "") ' prefix
+                rec.Add Trim(ws.Cells(r, 7).Value & "") ' replacement_col
+                rec.Add Trim(ws.Cells(r, 8).Value & "") ' exact_replacement
+                
+                Set exclColl = New Collection
+                rec.Add exclColl                       ' index 8: excludes
+                
+                dict.Add key, rec
+            End If
+            
+            ' Exclude columns start at C9
+            For c = 9 To lastCol
+                If Len(Trim(ws.Cells(r, c).Value & "")) > 0 Then
+                    dict(key)(8).Add ws.Cells(r, c).Value
+                End If
+            Next c
+            
+ContinueSensitiveLoop:
+        Next r
+        
+        ' Build XML nodes
+        For Each k In dict.Keys
+            
+            Set rec = dict(k)
+            
+            If Len(rec(4)) = 0 Then GoTo NextSensitiveGroup
+            
+            Dim sensDataElem As Object
+            Set sensDataElem = xmlDoc.createElement("sensitive_data")
+            
+            If Len(rec(1)) > 0 Then sensDataElem.setAttribute "db_id", rec(1)
+            If Len(rec(2)) > 0 Then sensDataElem.setAttribute "id", rec(2)
+            If Len(rec(3)) > 0 Then sensDataElem.setAttribute "table_name", rec(3)
+            
+            Dim colElem As Object
+            Set colElem = xmlDoc.createElement("column")
+            
+            colElem.setAttribute "col_name", rec(4)
+            If Len(rec(5)) > 0 Then colElem.setAttribute "prefix", rec(5)
+            If Len(rec(6)) > 0 Then colElem.setAttribute "replacement_col", rec(6)
+            If Len(rec(7)) > 0 Then colElem.setAttribute "exact_replacement", rec(7)
+            
+            Set exclColl = rec(8)
+            If exclColl.Count > 0 Then
+                For c = 1 To exclColl.Count
+                    Dim exclElem As Object
+                    Set exclElem = xmlDoc.createElement("exclude")
+                    exclElem.Text = exclColl(c)
+                    colElem.appendChild exclElem
+                Next c
+            End If
+            
+            sensDataElem.appendChild colElem
+            sensElem.appendChild sensDataElem
+            
+NextSensitiveGroup:
+        Next k
+        
+    End If
+    
+    Set ws = Nothing
+    
+    ' -------------------------------------------------------
+    ' MASKING
+    ' -------------------------------------------------------
+    On Error Resume Next
+    Set ws = wb.Worksheets("masking")
+    On Error GoTo 0
+    
+    If Not ws Is Nothing Then
+        
+        Dim maskElem As Object
+        Set maskElem = xmlDoc.createElement("masked_tables")
+        rootElem.appendChild maskElem
+        
+        lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        
+        Set maskDict = CreateObject("Scripting.Dictionary")
+        
+        For r = 2 To lastRow
+            
+            key = Trim(ws.Cells(r, 2).Value & "") & "|" & _
+                  Trim(ws.Cells(r, 3).Value & "") & "|" & _
+                  Trim(ws.Cells(r, 4).Value & "") & "|" & _
+                  Trim(ws.Cells(r, 5).Value & "")
+            
+            If Len(Trim(ws.Cells(r, 2).Value & "")) = 0 And Len(Trim(ws.Cells(r, 4).Value & "")) = 0 Then GoTo ContinueMaskingLoop
+            
+            If Not maskDict.Exists(key) Then
+                Set tRec = New Collection
+                tRec.Add Trim(ws.Cells(r, 2).Value & "") ' db_id
+                tRec.Add Trim(ws.Cells(r, 3).Value & "") ' masking_action
+                tRec.Add Trim(ws.Cells(r, 4).Value & "") ' table_name
+                tRec.Add Trim(ws.Cells(r, 5).Value & "") ' title
+                
+                Set colList = New Collection
+                tRec.Add colList    ' masked columns
+                
+                maskDict.Add key, tRec
+            End If
+            
+            ' masked_column entry
+            Set colRec = New Collection
+            colRec.Add Trim(ws.Cells(r, 6).Value & "")   ' colname
+            colRec.Add Trim(ws.Cells(r, 7).Value & "")   ' masking_type
+            colRec.Add Trim(ws.Cells(r, 8).Value & "")   ' sensitive_date
+            colRec.Add Trim(ws.Cells(r, 9).Value & "")   ' replacement_column
+            colRec.Add Trim(ws.Cells(r, 10).Value & "")  ' col_ref
+            colRec.Add Trim(ws.Cells(r, 11).Value & "")  ' replacement_value
+            colRec.Add Trim(ws.Cells(r, 12).Value & "")  ' where
+            
+            maskDict(key)(5).Add colRec
+        
+ContinueMaskingLoop:
+        Next r
+        
+        ' build masked_table XML
+        For Each k In maskDict.Keys
+            
+            Set tRec = maskDict(k)
+            
+            Dim tableElem As Object
+            Set tableElem = xmlDoc.createElement("masked_table")
+            
+            If Len(tRec(1)) > 0 Then tableElem.setAttribute "db_id", tRec(1)
+            If Len(tRec(2)) > 0 Then tableElem.setAttribute "masking_action", tRec(2)
+            If Len(tRec(3)) > 0 Then tableElem.setAttribute "table_name", tRec(3)
+            If Len(tRec(4)) > 0 Then tableElem.setAttribute "title", tRec(4)
+            
+            Set colList = tRec(5)
+            
+            For c = 1 To colList.Count
+                Set colRec = colList(c)
+                
+                Dim mcolElem As Object
+                Set mcolElem = xmlDoc.createElement("masked_column")
+                
+                If Len(colRec(1)) > 0 Then mcolElem.setAttribute "colname", colRec(1)
+                If Len(colRec(2)) > 0 Then mcolElem.setAttribute "masking_type", colRec(2)
+                If Len(colRec(3)) > 0 Then mcolElem.setAttribute "sensitive_date", colRec(3)
+                If Len(colRec(4)) > 0 Then mcolElem.setAttribute "replacement_column", colRec(4)
+                If Len(colRec(5)) > 0 Then mcolElem.setAttribute "col_ref", colRec(5)
+                If Len(colRec(6)) > 0 Then mcolElem.setAttribute "replacement_value", colRec(6)
+                If Len(colRec(7)) > 0 Then mcolElem.setAttribute "where", colRec(7)
+                
+                tableElem.appendChild mcolElem
+            Next c
+            
+            maskElem.appendChild tableElem
+            
+        Next k
+        
+    End If
+    
+    Set ws = Nothing
+    
+    ' -------------------------------------------------------
+    ' POST-MASKING
+    ' -------------------------------------------------------
+    On Error Resume Next
+    Set ws = wb.Worksheets("post_masking")
+    On Error GoTo 0
+    
+    If Not ws Is Nothing Then
+        
+        Dim postElem As Object
+        Set postElem = xmlDoc.createElement("post_masking")
+        rootElem.appendChild postElem
+        
+        lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        
+        For r = 2 To lastRow
+            
+            If Len(Trim(ws.Cells(r, 2).Value & "")) > 0 Then
+            
+                Dim postScriptElem As Object
+                Set postScriptElem = xmlDoc.createElement("script")
+                
+                postScriptElem.Text = ws.Cells(r, 2).Value
+                
+                If Len(Trim(ws.Cells(r, 3).Value & "")) > 0 Then _
+                    postScriptElem.setAttribute "title", ws.Cells(r, 3).Value
+                If Len(Trim(ws.Cells(r, 4).Value & "")) > 0 Then _
+                    postScriptElem.setAttribute "db_id", ws.Cells(r, 4).Value
+                
+                postElem.appendChild postScriptElem
+            End If
+            
+        Next r
+        
+    End If
+    
+    ' -------------------------------------------------------
+    ' SAVE XML
+    ' -------------------------------------------------------
+    xmlDoc.Save savePath
+    
+    MsgBox "XML export completed successfully!" & vbCrLf & _
+           "Saved to: " & savePath, vbInformation
+
+End Sub
+
+
