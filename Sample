@@ -1,0 +1,12 @@
+An AWS DevOps developer for Murex requires a hybrid skill set combining cloud automation, infrastructure as code (IaC), and specialized knowledge of the Murex trading platform. Key requirements include expertise in AWS services (EC2, S3, RDS), CI/CD pipeline implementation (Jenkins/GitLab), Linux scripting, SQL, and Murex-specific components like MxML Exchange and DataMart. 
+Core AWS DevOps & Technical Skills 
+Cloud Proficiency: Deep knowledge of AWS services (EC2, S3, RDS, EKS/ECS, CloudWatch) for hosting Murex workloads.
+Infrastructure as Code (IaC): Experience automating infrastructure deployment using Terraform or AWS CloudFormation.
+CI/CD Pipeline Design: Building automated pipelines for testing, packaging, and deploying code using Jenkins, GitLab, or AWS CodePipeline.
+Scripting & Automation: Strong proficiency in Linux/Unix shell scripting, Python, or PowerShell for automating repetitive tasks and platform management.
+Containerization & Monitoring: Managing containers (Docker, Kubernetes) and implementing monitoring/logging solutions like ELK Stack or AWS CloudWatch. 
+Murex-Specific & Domain Skills 
+Murex Expertise: Subject matter expertise in Murex (preferably MX.3), including front-office, MxML exchange, and DataMart.
+Financial Domain Knowledge: Strong understanding of financial instruments, particularly FX, Money Markets (MM), and Derivatives.
+Database Management: Skilled in SQL and managing database performance for high-volume trading data.
+System Integration: Expertise in configuring Murex interfaces and working with financial market systems. 
