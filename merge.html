@@ -3,7 +3,7 @@
 OUT="final_dashboard.html"
 
 ############################################################
-# HTML HEADER + ULTRA‑COMPACT CSS
+# HTML HEADER + MODERN COMPACT CSS
 ############################################################
 cat <<EOF > "$OUT"
 <!DOCTYPE html>
@@ -11,109 +11,142 @@ cat <<EOF > "$OUT"
 <head>
 <meta charset="UTF-8">
 <title>Enterprise Health Dashboard</title>
-<style>
 
+<style>
 body {
-    font-family: Segoe UI, sans-serif;
-    background: #f4f7fb;
-    padding: 20px;
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    background: #eef2f7;
+    padding: 16px;
+    margin: 0;
+    max-width: 1400px;
+    margin: auto;
 }
 
 h1 {
     text-align: center;
     color: #1f3c88;
-    margin-bottom: 20px;
-    font-size: 26px;
+    margin-bottom: 14px;
+    font-size: 22px;
 }
 
-/* SUPER COMPACT TABLE */
+/* TABLE */
 .main-table {
     width: 100%;
     border-collapse: collapse;
-    background: #ffffff;
+    background: #fff;
     border-radius: 10px;
     overflow: hidden;
-    font-size: 13px;
-    table-layout: fixed;     /* FORCE FIXED WIDTH */
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    font-size: 12px;
+    table-layout: fixed;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
+/* HEADER */
 .main-table th {
+    position: sticky;
+    top: 0;
     background: #1f3c88;
     color: white;
     padding: 6px;
-    text-align: left;
-    font-size: 12px;
-}
-
-.main-table td {
-    padding: 6px;
-    border-bottom: 1px solid #e6e6e6;
-    white-space: nowrap;         /* PREVENT WRAP */
-    overflow: hidden;
-    text-overflow: ellipsis;     /* SHOW ... */
-}
-
-/* FIX COLUMN WIDTHS */
-th:nth-child(1), td:nth-child(1) { width: 10%; }
-th:nth-child(2), td:nth-child(2) { width: 5%;  text-align:center; }
-th:nth-child(3), td:nth-child(3) { width: 10%; }
-th:nth-child(4), td:nth-child(4) { width: 8%; }
-th:nth-child(5), td:nth-child(5) { width: 15%; }
-th:nth-child(6), td:nth-child(6) { width: 5%; text-align:center; }
-th:nth-child(7), td:nth-child(7) { width: 7%; text-align:center; }
-th:nth-child(8), td:nth-child(8) { width: 8%; text-align:center; }
-
-/* STATUS CIRCLES */
-.status-circle {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    display: inline-block;
-}
-
-.ok   { background: #2ecc71 !important; }
-.warn { background: #f39c12 !important; }
-.crit { background: #e74c3c !important; }
-
-/* DETAILS MUST NOT EXPAND COLUMN */
-details {
-    display: inline-block;
-    width: 100%;
-}
-details summary {
-    cursor: pointer;
-    color: #1f3c88;
-    font-weight: bold;
     font-size: 11px;
+    text-transform: uppercase;
+}
+
+/* CELLS */
+.main-table td {
+    padding: 5px 6px;
+    border-bottom: 1px solid #f0f0f0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-/* DETAILS TABLE */
+/* ROW HOVER */
+.main-table tr:hover {
+    background: #f8fbff;
+}
+
+/* COLUMN WIDTHS */
+th:nth-child(1), td:nth-child(1) { width: 9%; }
+th:nth-child(2), td:nth-child(2) { width: 4%; text-align:center; }
+th:nth-child(3), td:nth-child(3) { width: 10%; }
+th:nth-child(4), td:nth-child(4) { width: 7%; }
+th:nth-child(5), td:nth-child(5) { width: 16%; }
+th:nth-child(6), td:nth-child(6) { width: 5%; text-align:center; }
+th:nth-child(7), td:nth-child(7) { width: 6%; text-align:center; }
+th:nth-child(8), td:nth-child(8) { width: 7%; text-align:center; }
+
+/* STATUS DOT */
+.status-circle {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 4px rgba(0,0,0,0.2);
+}
+
+.ok   { background: #2ecc71; }
+.warn { background: #f39c12; }
+.crit { background: #e74c3c; }
+
+/* DETAILS */
+details {
+    display: inline-block;
+    width: 100%;
+}
+
+details summary {
+    cursor: pointer;
+    font-size: 11px;
+    color: #1f3c88;
+    font-weight: 600;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+details summary:hover {
+    background: #eef3ff;
+}
+
+/* INNER BOX */
+.details-box {
+    margin-top: 6px;
+    padding: 6px;
+    background: #fafbfe;
+    border-radius: 6px;
+    border: 1px solid #eee;
+}
+
+/* INNER TABLE */
 details table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 6px;
-    font-size: 12px;
-    background: #fafafa;
+    font-size: 11px;
+    margin-top: 4px;
 }
 
-details table th, details table td {
-    padding: 5px;
-    border-bottom: 1px solid #ddd;
+details th {
+    background: #f1f4f9;
+    color: #333;
+    font-weight: 600;
+    font-size: 10px;
 }
 
+details td {
+    padding: 4px;
+    border-bottom: 1px solid #eee;
+}
+
+/* SECTION TITLE */
 .section-title {
-    margin-top: 8px;
-    font-size: 13px;
+    font-size: 11px;
+    font-weight: 600;
     color: #1f3c88;
-    font-weight: bold;
+    margin-top: 6px;
 }
-
 </style>
 </head>
+
 <body>
 
 <h1>Enterprise Environment Health Dashboard</h1>
@@ -132,7 +165,7 @@ details table th, details table td {
 EOF
 
 ############################################################
-# LOOP THROUGH ALL JSON FILES
+# LOOP THROUGH JSON FILES
 ############################################################
 for file in env_*.json; do
     [ ! -f "$file" ] && continue
@@ -162,8 +195,11 @@ for file in env_*.json; do
     echo "<td>$PIDS</td>" >> "$OUT"
     echo "<td>$DISK_COUNT</td>" >> "$OUT"
 
-    echo "<td><details><summary>...</summary>" >> "$OUT"
+    echo "<td><details><summary>View</summary><div class='details-box'>" >> "$OUT"
 
+    ############################################################
+    # DISK DETAILS
+    ############################################################
     echo "<div class='section-title'>Disk Details</div>" >> "$OUT"
     echo "<table><tr><th>Mount</th><th>Usage</th></tr>" >> "$OUT"
 
@@ -175,6 +211,9 @@ for file in env_*.json; do
 
     echo "</table>" >> "$OUT"
 
+    ############################################################
+    # BL SERVERS
+    ############################################################
     echo "<div class='section-title'>BL Servers</div>" >> "$OUT"
     echo "<table><tr><th>Server</th><th>Status</th></tr>" >> "$OUT"
 
@@ -190,7 +229,8 @@ for file in env_*.json; do
     done
 
     echo "</table>" >> "$OUT"
-    echo "</details></td>" >> "$OUT"
+
+    echo "</div></details></td>" >> "$OUT"
     echo "</tr>" >> "$OUT"
 done
 
