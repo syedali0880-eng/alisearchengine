@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# 1. Environment and Path Setup
+ENV_NAME=$(echo "$mxDir" | cut -f4 -d "/")
+CURRENT_TIME=$(date "+%Y-%m-%d %H:%M:%S")
+HOSTNAME=$(hostname)
+
+# 2. Extract and Clean Servers (Cleaning ^a and control chars)
+EXTRACTED=$(grep -oP '(?<=:-)[^}]+' env.sh | sed 's/[[:cntrl:]]//g' | sort -u)
+OL_SERVER=$(grep "COMS1" env.sh | grep -oP '(?<=:-)[^}]+' | sed 's/[[:cntrl:]]//g' | head -n 1)
+
+# Populate BL Servers
+BL_SERVERS=()
+for host in $EXTRACTED; do
+    if [ "$host" != "$OL_SERVER" ]; then
+        BL_SERVERS+=("$host")
+    fi
+done
+[ ${#BL_SERVERS[@]} -eq 0 ] && BL_SERVERS+=("$OL_SERVER")
+
+# 3. Perform Checks
+
+# Disk Check
+DISK_RAW=$(df -h 2>/dev/null | awk 'NR>1 && $5+0 >= 80 {print $(NF) " (" $5 ")"}' | paste -sd ';')
+DISK_COUNT=$(echo "$DISK_RAW" | tr ';' '\n' | grep -c "(" || echo 0)
+
+# Murex Service Check
+PID_COUNT=$(ls -1 "$mxDir/logs"/*.pid 2>/dev/null | wc -l)
+PID_COUNT=${PID_COUNT:-0}
+
+# Reachability Check
+BL_JSON=""
+for srv in "${BL_SERVERS[@]}"; do
+    if [ "$srv" == "$OL_SERVER" ]; then
+        STATUS="REACHABLE"
+    else
+        ssh -q -o ConnectTimeout=2 -o BatchMode=yes "$srv" exit 2>/dev/null
+        [ $? -eq 0 ] && STATUS="REACHABLE" || STATUS="DOWN"
+    fi
+
+    BL_JSON+="    {\"name\": \"$srv\", \"status\": \"$STATUS\"},\n"
+done
+
+# Remove trailing comma
+BL_JSON=$(echo -e "$BL_JSON" | sed '$ s/,$//')
+
+# 4. Determine Global Status
+GLOBAL_STATUS="HEALTHY"
+CRIT_COUNT=0
+WARN_COUNT=0
+
+[ "$PID_COUNT" -le 10 ] && ((CRIT_COUNT++))
+[ "$DISK_COUNT" -gt 0 ] && ((WARN_COUNT++))
+
+if [ "$CRIT_COUNT" -gt 0 ]; then
+    GLOBAL_STATUS="CRITICAL"
+elif [ "$WARN_COUNT" -gt 0 ]; then
+    GLOBAL_STATUS="WARNING"
+fi
+
+# 5. Produce JSON Output
+JSON_FILE="env_${ENV_NAME}.json"
+
+cat <<EOF > "$JSON_FILE"
+{
+  "environment": "$ENV_NAME",
+  "orchestrator": "$OL_SERVER",
+  "timestamp": "$CURRENT_TIME",
+  "global_status": "$GLOBAL_STATUS",
+  "disk_alerts": $DISK_COUNT,
+  "pid_count": $PID_COUNT,
+  "bl_servers": [
+$BL_JSON
+  ]
+}
+EOF
+
+echo "JSON report generated: $JSON_FILE"
