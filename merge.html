@@ -60,9 +60,12 @@ h1 {
     color: #ffffff !important;
     font-size: 12px;
     font-weight: bold;
+    display: inline-block;
+    min-width: 80px;
+    text-align: center;
 }
 
-.ok { background: #2ecc71 !important; }
+.ok   { background: #2ecc71 !important; }
 .warn { background: #f39c12 !important; }
 .crit { background: #e74c3c !important; }
 
@@ -132,7 +135,13 @@ for file in env_*.json; do
     PIDS=$(grep '"pid_count"' "$file" | sed 's/[^0-9]//g')
     DISK_COUNT=$(grep '"disk_alerts"' "$file" | sed 's/[^0-9]//g')
 
-    BADGE_CLASS=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
+    # FIXED: Map JSON status → CSS class
+    case "$STATUS" in
+        HEALTHY)  BADGE_CLASS="ok" ;;
+        WARNING)  BADGE_CLASS="warn" ;;
+        CRITICAL) BADGE_CLASS="crit" ;;
+        *)        BADGE_CLASS="warn" ;;
+    esac
 
     ############################################################
     # MAIN ROW
@@ -170,7 +179,13 @@ for file in env_*.json; do
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
         NAME=$(echo "$line" | sed 's/.*"name": "\(.*\)".*/\1/')
         ST=$(echo "$line" | sed 's/.*"status": "\(.*\)".*/\1/')
-        CLASS=$(echo "$ST" | tr '[:upper:]' '[:lower:]')
+
+        case "$ST" in
+            REACHABLE) CLASS="ok" ;;
+            DOWN)      CLASS="crit" ;;
+            *)         CLASS="warn" ;;
+        esac
+
         echo "<tr><td>$NAME</td><td><span class='badge $CLASS'>$ST</span></td></tr>" >> "$OUT"
     done
 
@@ -178,7 +193,6 @@ for file in env_*.json; do
 
     echo "</details></td>" >> "$OUT"
     echo "</tr>" >> "$OUT"
-
 done
 
 ############################################################
