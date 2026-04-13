@@ -1,0 +1,120 @@
+#!/bin/bash
+
+OUT="final_dashboard.html"
+
+###############################################
+# Step 1 — HTML Header
+###############################################
+
+cat <<EOF > "$OUT"
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Enterprise Health Dashboard</title>
+<style>
+body { font-family: Segoe UI, sans-serif; background: #eef2f3; padding: 20px; }
+h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+.env-box {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.env-title { font-size: 22px; font-weight: bold; color: #34495e; }
+.badge { padding: 5px 12px; border-radius: 20px; color: white; font-size: 12px; }
+.ok { background: #2ecc71; }
+.warn { background: #f39c12; }
+.crit { background: #e74c3c; }
+table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+th { background: #f8f9fa; padding: 10px; text-align: left; }
+td { padding: 10px; border-bottom: 1px solid #eee; }
+.crit-row { background: #fff1f1; }
+.status { padding: 4px 10px; border-radius: 6px; color: white; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<h1>Enterprise Environment Health Dashboard</h1>
+EOF
+
+###############################################
+# Step 3 — Loop Through All JSON Files
+###############################################
+
+for file in env_*.json; do
+    [ ! -f "$file" ] && continue
+
+    ENV=$(jq -r '.environment' "$file")
+    STATUS=$(jq -r '.global_status' "$file")
+    ORCH=$(jq -r '.orchestrator' "$file")
+    PIDS=$(jq -r '.pid_count' "$file")
+    DISK_COUNT=$(jq -r '.disk_alerts' "$file")
+
+    BADGE_CLASS=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
+
+    echo "<div class='env-box'>" >> "$OUT"
+    echo "<div class='env-title'>$ENV <span class='badge $BADGE_CLASS'>$STATUS</span></div>" >> "$OUT"
+
+    echo "<table>" >> "$OUT"
+    echo "<tr><th>Component</th><th>Node</th><th>Status</th><th>Details</th></tr>" >> "$OUT"
+
+    ###############################################
+    # Murex Services
+    ###############################################
+    if [ "$PIDS" -gt 10 ]; then
+        echo "<tr><td>Murex Services</td><td>$ORCH</td><td><span class='status ok'>RUNNING</span></td><td>$PIDS PIDs</td></tr>" >> "$OUT"
+    else
+        echo "<tr class='crit-row'><td>Murex Services</td><td>$ORCH</td><td><span class='status crit'>STOPPED</span></td><td>$PIDS PIDs</td></tr>" >> "$OUT"
+    fi
+
+    ###############################################
+    # Disk Alerts
+    ###############################################
+    if [ "$DISK_COUNT" -gt 0 ]; then
+        echo "<tr><td>Disk</td><td>Local</td><td><span class='status warn'>ALERT</span></td><td>$DISK_COUNT partitions above threshold</td></tr>" >> "$OUT"
+    else
+        echo "<tr><td>Disk</td><td>Local</td><td><span class='status ok'>STABLE</span></td><td>No issues</td></tr>" >> "$OUT"
+    fi
+
+    ###############################################
+    # Disk Details
+    ###############################################
+    DISK_LEN=$(jq '.disk_details | length' "$file")
+    if [ "$DISK_LEN" -gt 0 ]; then
+        for ((i=0; i<DISK_LEN; i++)); do
+            MOUNT=$(jq -r ".disk_details[$i].mount" "$file")
+            USAGE=$(jq -r ".disk_details[$i].usage" "$file")
+            echo "<tr class='crit-row'><td>Disk Detail</td><td>$MOUNT</td><td><span class='status warn'>$USAGE</span></td><td>High usage</td></tr>" >> "$OUT"
+        done
+    fi
+
+    ###############################################
+    # BL Servers
+    ###############################################
+    COUNT=$(jq '.bl_servers | length' "$file")
+    for ((i=0; i<COUNT; i++)); do
+        NAME=$(jq -r ".bl_servers[$i].name" "$file")
+        ST=$(jq -r ".bl_servers[$i].status" "$file")
+
+        if [ "$ST" = "DOWN" ]; then
+            echo "<tr class='crit-row'><td>BL Server</td><td>$NAME</td><td><span class='status crit'>DOWN</span></td><td>SSH timeout</td></tr>" >> "$OUT"
+        else
+            echo "<tr><td>BL Server</td><td>$NAME</td><td><span class='status ok'>REACHABLE</span></td><td>OK</td></tr>" >> "$OUT"
+        fi
+    done
+
+    echo "</table></div>" >> "$OUT"
+done
+
+###############################################
+# Step 4 — Close HTML
+###############################################
+
+cat <<EOF >> "$OUT"
+</body>
+</html>
+EOF
+
+echo "Dashboard generated: $OUT"
