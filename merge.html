@@ -82,6 +82,7 @@ details summary {
     display: block;
     font-size: 10px;
     margin-bottom: 2px;
+    font-weight: 600;
 }
 
 .section-title {
@@ -157,14 +158,19 @@ for file in env_*.json; do
     done
 
     ############################################################
-    # BL SERVERS (FINAL CLEAN FIX)
+    # BL SERVERS (FINAL FIXED VERSION)
     ############################################################
     echo "<div class='section-title'>BL</div>" >> "$OUT"
 
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
 
         NAME=$(echo "$line" | grep -oP '"name"\s*:\s*"\K[^"]+')
-        ST=$(echo "$line" | grep -oP '"status"\s*:\s*\K[^,} ]+')
+
+        # CLEAN STATUS (THIS FIXES YOUR ORANGE ISSUE)
+        ST=$(echo "$line" \
+            | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*\([^,}]*\).*/\1/p' \
+            | tr -d ' "\r' \
+            | tr '[:lower:]' '[:upper:]')
 
         case "$ST" in
             REACHABLE) COLOR="#2ecc71" ;;
