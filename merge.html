@@ -2,9 +2,6 @@
 
 OUT="final_dashboard.html"
 
-############################################################
-# HTML HEADER + MODERN COMPACT CSS
-############################################################
 cat <<EOF > "$OUT"
 <!DOCTYPE html>
 <html>
@@ -14,139 +11,104 @@ cat <<EOF > "$OUT"
 
 <style>
 body {
-    font-family: "Segoe UI", Roboto, Arial, sans-serif;
-    background: #eef2f7;
-    padding: 16px;
+    font-family: Arial, sans-serif;
+    background: #f4f6fa;
+    padding: 10px;
     margin: 0;
-    max-width: 1400px;
-    margin: auto;
 }
 
 h1 {
     text-align: center;
-    color: #1f3c88;
-    margin-bottom: 14px;
-    font-size: 22px;
+    font-size: 18px;
+    margin-bottom: 10px;
 }
 
-/* TABLE */
+/* TABLE - AUTO WIDTH BASED ON CONTENT */
 .main-table {
     width: 100%;
     border-collapse: collapse;
     background: #fff;
-    border-radius: 10px;
-    overflow: hidden;
-    font-size: 12px;
-    table-layout: fixed;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    font-size: 11px;
 }
 
 /* HEADER */
 .main-table th {
-    position: sticky;
-    top: 0;
-    background: #1f3c88;
-    color: white;
-    padding: 6px;
-    font-size: 11px;
-    text-transform: uppercase;
+    background: #2c3e50;
+    color: #fff;
+    padding: 4px 6px;
+    text-align: left;
+    white-space: nowrap;
 }
 
 /* CELLS */
 .main-table td {
-    padding: 5px 6px;
-    border-bottom: 1px solid #f0f0f0;
+    padding: 3px 6px;
+    border-bottom: 1px solid #eee;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
-/* ROW HOVER */
+/* ALLOW WRAP ONLY WHERE NEEDED */
+.main-table td:nth-child(5) {
+    white-space: normal;  /* timestamp wraps */
+}
+
+/* HOVER */
 .main-table tr:hover {
-    background: #f8fbff;
+    background: #f0f5ff;
 }
-
-/* COLUMN WIDTHS */
-th:nth-child(1), td:nth-child(1) { width: 9%; }
-th:nth-child(2), td:nth-child(2) { width: 4%; text-align:center; }
-th:nth-child(3), td:nth-child(3) { width: 10%; }
-th:nth-child(4), td:nth-child(4) { width: 7%; }
-th:nth-child(5), td:nth-child(5) { width: 16%; }
-th:nth-child(6), td:nth-child(6) { width: 5%; text-align:center; }
-th:nth-child(7), td:nth-child(7) { width: 6%; text-align:center; }
-th:nth-child(8), td:nth-child(8) { width: 7%; text-align:center; }
 
 /* STATUS DOT */
 .status-circle {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     display: inline-block;
-    box-shadow: 0 0 4px rgba(0,0,0,0.2);
 }
 
 .ok   { background: #2ecc71; }
 .warn { background: #f39c12; }
 .crit { background: #e74c3c; }
 
-/* DETAILS */
+/* DETAILS - DO NOT BREAK TABLE WIDTH */
 details {
-    display: inline-block;
-    width: 100%;
+    display: inline;
 }
 
 details summary {
     cursor: pointer;
-    font-size: 11px;
-    color: #1f3c88;
-    font-weight: 600;
-    padding: 2px 4px;
-    border-radius: 4px;
+    font-size: 10px;
+    color: #2c3e50;
 }
 
-details summary:hover {
-    background: #eef3ff;
-}
-
-/* INNER BOX */
+/* INNER SECTION */
 .details-box {
-    margin-top: 6px;
-    padding: 6px;
-    background: #fafbfe;
-    border-radius: 6px;
-    border: 1px solid #eee;
+    margin-top: 5px;
+    padding: 5px;
+    background: #fafafa;
+    border: 1px solid #ddd;
 }
 
 /* INNER TABLE */
-details table {
-    width: 100%;
+.details-box table {
+    width: auto;
     border-collapse: collapse;
-    font-size: 11px;
-    margin-top: 4px;
-}
-
-details th {
-    background: #f1f4f9;
-    color: #333;
-    font-weight: 600;
     font-size: 10px;
 }
 
-details td {
-    padding: 4px;
-    border-bottom: 1px solid #eee;
+.details-box th, .details-box td {
+    padding: 2px 4px;
+    border-bottom: 1px solid #ddd;
+    white-space: nowrap;
 }
 
-/* SECTION TITLE */
 .section-title {
-    font-size: 11px;
-    font-weight: 600;
-    color: #1f3c88;
-    margin-top: 6px;
+    font-size: 10px;
+    font-weight: bold;
+    margin-top: 4px;
 }
 </style>
-</head>
 
+</head>
 <body>
 
 <h1>Enterprise Environment Health Dashboard</h1>
@@ -164,9 +126,6 @@ details td {
 </tr>
 EOF
 
-############################################################
-# LOOP THROUGH JSON FILES
-############################################################
 for file in env_*.json; do
     [ ! -f "$file" ] && continue
 
@@ -189,19 +148,16 @@ for file in env_*.json; do
     echo "<tr>" >> "$OUT"
     echo "<td>$ENV</td>" >> "$OUT"
     echo "<td><span class='status-circle $BADGE_CLASS'></span></td>" >> "$OUT"
-    echo "<td>${OWNER:-N/A}</td>" >> "$OUT"
-    echo "<td>${VERSION:-N/A}</td>" >> "$OUT"
+    echo "<td>${OWNER:--}</td>" >> "$OUT"
+    echo "<td>${VERSION:--}</td>" >> "$OUT"
     echo "<td>$REFRESH</td>" >> "$OUT"
     echo "<td>$PIDS</td>" >> "$OUT"
     echo "<td>$DISK_COUNT</td>" >> "$OUT"
 
-    echo "<td><details><summary>View</summary><div class='details-box'>" >> "$OUT"
+    echo "<td><details><summary>+</summary><div class='details-box'>" >> "$OUT"
 
-    ############################################################
-    # DISK DETAILS
-    ############################################################
-    echo "<div class='section-title'>Disk Details</div>" >> "$OUT"
-    echo "<table><tr><th>Mount</th><th>Usage</th></tr>" >> "$OUT"
+    echo "<div class='section-title'>Disk</div>" >> "$OUT"
+    echo "<table>" >> "$OUT"
 
     awk '/"disk_details"/,/]/' "$file" | grep '{' | while read -r line; do
         MOUNT=$(echo "$line" | sed 's/.*"mount": "\(.*\)".*/\1/')
@@ -211,11 +167,8 @@ for file in env_*.json; do
 
     echo "</table>" >> "$OUT"
 
-    ############################################################
-    # BL SERVERS
-    ############################################################
-    echo "<div class='section-title'>BL Servers</div>" >> "$OUT"
-    echo "<table><tr><th>Server</th><th>Status</th></tr>" >> "$OUT"
+    echo "<div class='section-title'>BL</div>" >> "$OUT"
+    echo "<table>" >> "$OUT"
 
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
         NAME=$(echo "$line" | sed 's/.*"name": "\(.*\)".*/\1/')
@@ -234,9 +187,6 @@ for file in env_*.json; do
     echo "</tr>" >> "$OUT"
 done
 
-############################################################
-# CLOSE HTML
-############################################################
 cat <<EOF >> "$OUT"
 </table>
 </body>
