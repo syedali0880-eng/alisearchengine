@@ -3,7 +3,7 @@
 OUT="final_dashboard.html"
 
 ############################################################
-# HTML HEADER + CSS
+# HTML HEADER + MODERN COLORFUL CSS
 ############################################################
 cat <<EOF > "$OUT"
 <!DOCTYPE html>
@@ -12,45 +12,89 @@ cat <<EOF > "$OUT"
 <meta charset="UTF-8">
 <title>Enterprise Health Dashboard</title>
 <style>
-body { font-family: Segoe UI, sans-serif; background: #eef2f3; padding: 20px; }
-h1 { text-align: center; color: #2c3e50; margin-bottom: 25px; }
+
+body {
+    font-family: Segoe UI, sans-serif;
+    background: linear-gradient(135deg, #dfe9f3, #ffffff);
+    padding: 25px;
+}
+
+h1 {
+    text-align: center;
+    color: #1f3c88;
+    margin-bottom: 25px;
+    font-size: 28px;
+    letter-spacing: 1px;
+}
 
 .main-table {
     width: 100%;
     border-collapse: collapse;
-    background: white;
-    border-radius: 10px;
+    background: #ffffff;
+    border-radius: 12px;
     overflow: hidden;
-    font-size: 13px;
-}
-.main-table th, .main-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid #eee;
-    text-align: left;
+    font-size: 14px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
-.badge { padding: 4px 10px; border-radius: 12px; color: white; font-size: 11px; font-weight: bold; }
-.ok { background: #2ecc71; }
-.warn { background: #f39c12; }
-.crit { background: #e74c3c; }
+.main-table th {
+    background: #1f3c88;
+    color: white;
+    padding: 10px;
+    text-align: left;
+    font-size: 13px;
+}
+
+.main-table td {
+    padding: 10px;
+    border-bottom: 1px solid #e6e6e6;
+}
+
+.main-table tr:hover {
+    background: #eef5ff;
+}
+
+.badge {
+    padding: 5px 12px;
+    border-radius: 12px;
+    color: white !important;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.ok { background: #2ecc71 !important; }
+.warn { background: #f39c12 !important; }
+.crit { background: #e74c3c !important; }
 
 details summary {
     cursor: pointer;
-    color: #2980b9;
+    color: #1f3c88;
     font-weight: bold;
     padding: 4px;
+    margin-top: 5px;
 }
 
 details table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 8px;
-    font-size: 12px;
+    font-size: 13px;
+    background: #fafafa;
+    border-radius: 8px;
 }
+
 details table th, details table td {
     padding: 6px;
     border-bottom: 1px solid #ddd;
 }
+
+.section-title {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #1f3c88;
+    font-weight: bold;
+}
+
 </style>
 </head>
 <body>
@@ -76,22 +120,22 @@ EOF
 for file in env_*.json; do
     [ ! -f "$file" ] && continue
 
-    # Extract simple fields
+    # Extract fields
     ENV=$(grep '"environment"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     STATUS=$(grep '"global_status"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
-    ORCH=$(grep '"orchestrator"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     OWNER=$(grep '"owner"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     VERSION=$(grep '"version"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     REFRESH=$(grep '"timestamp"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
+    ORCH=$(grep '"orchestrator"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
 
-    # Numeric fields (clean digits only)
+    # Numeric fields
     PIDS=$(grep '"pid_count"' "$file" | sed 's/[^0-9]//g')
     DISK_COUNT=$(grep '"disk_alerts"' "$file" | sed 's/[^0-9]//g')
 
     BADGE_CLASS=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
 
     ############################################################
-    # MAIN TABLE ROW (compact)
+    # MAIN ROW
     ############################################################
     echo "<tr>" >> "$OUT"
     echo "<td>$ENV</td>" >> "$OUT"
@@ -103,14 +147,12 @@ for file in env_*.json; do
     echo "<td>$DISK_COUNT</td>" >> "$OUT"
 
     ############################################################
-    # DETAILS COLUMN (collapsible)
+    # DETAILS COLUMN
     ############################################################
     echo "<td><details><summary>Expand</summary>" >> "$OUT"
 
-    #########################
     # Disk Details
-    #########################
-    echo "<h4>Disk Details</h4>" >> "$OUT"
+    echo "<div class='section-title'>Disk Details</div>" >> "$OUT"
     echo "<table><tr><th>Mount</th><th>Usage</th></tr>" >> "$OUT"
 
     awk '/"disk_details"/,/]/' "$file" | grep '{' | while read -r line; do
@@ -121,10 +163,8 @@ for file in env_*.json; do
 
     echo "</table>" >> "$OUT"
 
-    #########################
     # BL Servers
-    #########################
-    echo "<h4>Business Layer Servers</h4>" >> "$OUT"
+    echo "<div class='section-title'>Business Layer Servers</div>" >> "$OUT"
     echo "<table><tr><th>Server</th><th>Status</th></tr>" >> "$OUT"
 
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
