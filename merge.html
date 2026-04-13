@@ -3,7 +3,7 @@
 OUT="final_dashboard.html"
 
 ############################################################
-# HTML HEADER + MODERN COMPACT CSS
+# HTML HEADER + ULTRA‑COMPACT CSS
 ############################################################
 cat <<EOF > "$OUT"
 <!DOCTYPE html>
@@ -26,6 +26,7 @@ h1 {
     font-size: 26px;
 }
 
+/* SUPER COMPACT TABLE */
 .main-table {
     width: 100%;
     border-collapse: collapse;
@@ -33,29 +34,35 @@ h1 {
     border-radius: 10px;
     overflow: hidden;
     font-size: 13px;
-    table-layout: fixed;     /* FIX COLUMN WIDTHS */
+    table-layout: fixed;     /* FORCE FIXED WIDTH */
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .main-table th {
     background: #1f3c88;
     color: white;
-    padding: 8px;
+    padding: 6px;
     text-align: left;
     font-size: 12px;
 }
 
 .main-table td {
-    padding: 8px;
+    padding: 6px;
     border-bottom: 1px solid #e6e6e6;
-    white-space: nowrap;         /* PREVENT EXPANSION */
+    white-space: nowrap;         /* PREVENT WRAP */
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-overflow: ellipsis;     /* SHOW ... */
 }
 
-.main-table tr:hover {
-    background: #eef5ff;
-}
+/* FIX COLUMN WIDTHS */
+th:nth-child(1), td:nth-child(1) { width: 10%; }
+th:nth-child(2), td:nth-child(2) { width: 5%;  text-align:center; }
+th:nth-child(3), td:nth-child(3) { width: 10%; }
+th:nth-child(4), td:nth-child(4) { width: 8%; }
+th:nth-child(5), td:nth-child(5) { width: 15%; }
+th:nth-child(6), td:nth-child(6) { width: 5%; text-align:center; }
+th:nth-child(7), td:nth-child(7) { width: 7%; text-align:center; }
+th:nth-child(8), td:nth-child(8) { width: 8%; text-align:center; }
 
 /* STATUS CIRCLES */
 .status-circle {
@@ -69,14 +76,22 @@ h1 {
 .warn { background: #f39c12 !important; }
 .crit { background: #e74c3c !important; }
 
-/* DETAILS SECTION */
+/* DETAILS MUST NOT EXPAND COLUMN */
+details {
+    display: inline-block;
+    width: 100%;
+}
 details summary {
     cursor: pointer;
     color: #1f3c88;
     font-weight: bold;
-    padding: 4px 0;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
+/* DETAILS TABLE */
 details table {
     width: 100%;
     border-collapse: collapse;
@@ -86,7 +101,7 @@ details table {
 }
 
 details table th, details table td {
-    padding: 6px;
+    padding: 5px;
     border-bottom: 1px solid #ddd;
 }
 
@@ -105,14 +120,14 @@ details table th, details table td {
 
 <table class="main-table">
 <tr>
-    <th style="width:12%">Environment</th>
-    <th style="width:6%">Status</th>
-    <th style="width:12%">Owner</th>
-    <th style="width:10%">Version</th>
-    <th style="width:15%">Last Refresh</th>
-    <th style="width:6%">PIDs</th>
-    <th style="width:8%">Disk Alerts</th>
-    <th style="width:10%">Details</th>
+    <th>Env</th>
+    <th>St</th>
+    <th>Owner</th>
+    <th>Ver</th>
+    <th>Refreshed</th>
+    <th>PIDs</th>
+    <th>Disk</th>
+    <th>More</th>
 </tr>
 EOF
 
@@ -122,19 +137,15 @@ EOF
 for file in env_*.json; do
     [ ! -f "$file" ] && continue
 
-    # Extract fields
     ENV=$(grep '"environment"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     STATUS=$(grep '"global_status"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     OWNER=$(grep '"owner"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     VERSION=$(grep '"version"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     REFRESH=$(grep '"timestamp"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
-    ORCH=$(grep '"orchestrator"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
 
-    # Numeric fields
     PIDS=$(grep '"pid_count"' "$file" | sed 's/[^0-9]//g')
     DISK_COUNT=$(grep '"disk_alerts"' "$file" | sed 's/[^0-9]//g')
 
-    # Map JSON status → CSS class
     case "$STATUS" in
         HEALTHY)  BADGE_CLASS="ok" ;;
         WARNING)  BADGE_CLASS="warn" ;;
@@ -142,9 +153,6 @@ for file in env_*.json; do
         *)        BADGE_CLASS="warn" ;;
     esac
 
-    ############################################################
-    # MAIN ROW
-    ############################################################
     echo "<tr>" >> "$OUT"
     echo "<td>$ENV</td>" >> "$OUT"
     echo "<td><span class='status-circle $BADGE_CLASS'></span></td>" >> "$OUT"
@@ -154,12 +162,8 @@ for file in env_*.json; do
     echo "<td>$PIDS</td>" >> "$OUT"
     echo "<td>$DISK_COUNT</td>" >> "$OUT"
 
-    ############################################################
-    # DETAILS COLUMN
-    ############################################################
-    echo "<td><details><summary>Expand</summary>" >> "$OUT"
+    echo "<td><details><summary>...</summary>" >> "$OUT"
 
-    # Disk Details
     echo "<div class='section-title'>Disk Details</div>" >> "$OUT"
     echo "<table><tr><th>Mount</th><th>Usage</th></tr>" >> "$OUT"
 
@@ -171,25 +175,21 @@ for file in env_*.json; do
 
     echo "</table>" >> "$OUT"
 
-    # BL Servers
-    echo "<div class='section-title'>Business Layer Servers</div>" >> "$OUT"
+    echo "<div class='section-title'>BL Servers</div>" >> "$OUT"
     echo "<table><tr><th>Server</th><th>Status</th></tr>" >> "$OUT"
 
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
         NAME=$(echo "$line" | sed 's/.*"name": "\(.*\)".*/\1/')
         ST=$(echo "$line" | sed 's/.*"status": "\(.*\)".*/\1/')
-
         case "$ST" in
             REACHABLE) CLASS="ok" ;;
             DOWN)      CLASS="crit" ;;
             *)         CLASS="warn" ;;
         esac
-
         echo "<tr><td>$NAME</td><td><span class='status-circle $CLASS'></span></td></tr>" >> "$OUT"
     done
 
     echo "</table>" >> "$OUT"
-
     echo "</details></td>" >> "$OUT"
     echo "</tr>" >> "$OUT"
 done
