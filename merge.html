@@ -2,6 +2,9 @@
 
 OUT="final_dashboard.html"
 
+############################################################
+# HTML HEADER + CSS
+############################################################
 cat <<EOF > "$OUT"
 <!DOCTYPE html>
 <html>
@@ -10,101 +13,139 @@ cat <<EOF > "$OUT"
 <title>Enterprise Health Dashboard</title>
 <style>
 body { font-family: Segoe UI, sans-serif; background: #eef2f3; padding: 20px; }
-h1 { text-align: center; color: #2c3e50; margin-bottom: 30px; }
-.env-box {
+h1 { text-align: center; color: #2c3e50; margin-bottom: 25px; }
+
+.main-table {
+    width: 100%;
+    border-collapse: collapse;
     background: white;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 25px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 13px;
 }
-.env-title { font-size: 22px; font-weight: bold; color: #34495e; }
-.badge { padding: 5px 12px; border-radius: 20px; color: white; font-size: 12px; }
+.main-table th, .main-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+}
+
+.badge { padding: 4px 10px; border-radius: 12px; color: white; font-size: 11px; font-weight: bold; }
 .ok { background: #2ecc71; }
 .warn { background: #f39c12; }
 .crit { background: #e74c3c; }
-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-th { background: #f8f9fa; padding: 10px; text-align: left; }
-td { padding: 10px; border-bottom: 1px solid #eee; }
-.crit-row { background: #fff1f1; }
-.status { padding: 4px 10px; border-radius: 6px; color: white; font-size: 11px; }
-details { margin-top: 10px; }
-summary { cursor: pointer; font-weight: bold; padding: 5px; }
+
+details summary {
+    cursor: pointer;
+    color: #2980b9;
+    font-weight: bold;
+    padding: 4px;
+}
+
+details table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 12px;
+}
+details table th, details table td {
+    padding: 6px;
+    border-bottom: 1px solid #ddd;
+}
 </style>
 </head>
 <body>
 
 <h1>Enterprise Environment Health Dashboard</h1>
+
+<table class="main-table">
+<tr>
+    <th>Environment</th>
+    <th>Status</th>
+    <th>Owner</th>
+    <th>Version</th>
+    <th>Last Refresh</th>
+    <th>PIDs</th>
+    <th>Disk Alerts</th>
+    <th>Details</th>
+</tr>
 EOF
 
+############################################################
+# LOOP THROUGH ALL JSON FILES
+############################################################
 for file in env_*.json; do
     [ ! -f "$file" ] && continue
 
+    # Extract simple fields
     ENV=$(grep '"environment"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     STATUS=$(grep '"global_status"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     ORCH=$(grep '"orchestrator"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
+    OWNER=$(grep '"owner"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
+    VERSION=$(grep '"version"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
+    REFRESH=$(grep '"timestamp"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
 
-    # FIXED: numeric-only extraction
+    # Numeric fields (clean digits only)
     PIDS=$(grep '"pid_count"' "$file" | sed 's/[^0-9]//g')
     DISK_COUNT=$(grep '"disk_alerts"' "$file" | sed 's/[^0-9]//g')
 
     BADGE_CLASS=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
 
-    echo "<div class='env-box'>" >> "$OUT"
-    echo "<div class='env-title'>$ENV <span class='badge $BADGE_CLASS'>$STATUS</span></div>" >> "$OUT"
+    ############################################################
+    # MAIN TABLE ROW (compact)
+    ############################################################
+    echo "<tr>" >> "$OUT"
+    echo "<td>$ENV</td>" >> "$OUT"
+    echo "<td><span class='badge $BADGE_CLASS'>$STATUS</span></td>" >> "$OUT"
+    echo "<td>${OWNER:-N/A}</td>" >> "$OUT"
+    echo "<td>${VERSION:-N/A}</td>" >> "$OUT"
+    echo "<td>$REFRESH</td>" >> "$OUT"
+    echo "<td>$PIDS</td>" >> "$OUT"
+    echo "<td>$DISK_COUNT</td>" >> "$OUT"
 
-    echo "<table>" >> "$OUT"
-    echo "<tr><th>Component</th><th>Node</th><th>Status</th><th>Details</th></tr>" >> "$OUT"
+    ############################################################
+    # DETAILS COLUMN (collapsible)
+    ############################################################
+    echo "<td><details><summary>Expand</summary>" >> "$OUT"
 
-    # Murex Services
-    if [ "$PIDS" -gt 10 ]; then
-        echo "<tr><td>Murex Services</td><td>$ORCH</td><td><span class='status ok'>RUNNING</span></td><td>$PIDS PIDs</td></tr>" >> "$OUT"
-    else
-        echo "<tr class='crit-row'><td>Murex Services</td><td>$ORCH</td><td><span class='status crit'>STOPPED</span></td><td>$PIDS PIDs</td></tr>" >> "$OUT"
-    fi
-
-    # Disk summary
-    if [ "$DISK_COUNT" -gt 0 ]; then
-        echo "<tr><td>Disk</td><td>Local</td><td><span class='status warn'>ALERT</span></td><td>$DISK_COUNT partitions above threshold</td></tr>" >> "$OUT"
-    else
-        echo "<tr><td>Disk</td><td>Local</td><td><span class='status ok'>STABLE</span></td><td>No issues</td></tr>" >> "$OUT"
-    fi
-
-    echo "</table>" >> "$OUT"
-
-    # Collapsible Disk Details
-    echo "<details><summary>Disk Details ($DISK_COUNT alerts)</summary>" >> "$OUT"
-    echo "<table>" >> "$OUT"
+    #########################
+    # Disk Details
+    #########################
+    echo "<h4>Disk Details</h4>" >> "$OUT"
+    echo "<table><tr><th>Mount</th><th>Usage</th></tr>" >> "$OUT"
 
     awk '/"disk_details"/,/]/' "$file" | grep '{' | while read -r line; do
         MOUNT=$(echo "$line" | sed 's/.*"mount": "\(.*\)".*/\1/')
         USAGE=$(echo "$line" | sed 's/.*"usage": "\(.*\)".*/\1/')
-        echo "<tr class='crit-row'><td>$MOUNT</td><td><span class='status warn'>$USAGE</span></td><td>High usage</td></tr>" >> "$OUT"
+        echo "<tr><td>$MOUNT</td><td>$USAGE</td></tr>" >> "$OUT"
     done
 
-    echo "</table></details>" >> "$OUT"
+    echo "</table>" >> "$OUT"
 
-    # Collapsible BL Servers
-    echo "<details><summary>Business Layer Servers</summary>" >> "$OUT"
-    echo "<table>" >> "$OUT"
+    #########################
+    # BL Servers
+    #########################
+    echo "<h4>Business Layer Servers</h4>" >> "$OUT"
+    echo "<table><tr><th>Server</th><th>Status</th></tr>" >> "$OUT"
 
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
         NAME=$(echo "$line" | sed 's/.*"name": "\(.*\)".*/\1/')
         ST=$(echo "$line" | sed 's/.*"status": "\(.*\)".*/\1/')
-
-        if [ "$ST" = "DOWN" ]; then
-            echo "<tr class='crit-row'><td>$NAME</td><td><span class='status crit'>DOWN</span></td><td>SSH timeout</td></tr>" >> "$OUT"
-        else
-            echo "<tr><td>$NAME</td><td><span class='status ok'>REACHABLE</span></td><td>OK</td></tr>" >> "$OUT"
-        fi
+        CLASS=$(echo "$ST" | tr '[:upper:]' '[:lower:]')
+        echo "<tr><td>$NAME</td><td><span class='badge $CLASS'>$ST</span></td></tr>" >> "$OUT"
     done
 
-    echo "</table></details>" >> "$OUT"
+    echo "</table>" >> "$OUT"
 
-    echo "</div>" >> "$OUT"
+    echo "</details></td>" >> "$OUT"
+    echo "</tr>" >> "$OUT"
+
 done
 
+############################################################
+# CLOSE HTML
+############################################################
 cat <<EOF >> "$OUT"
+</table>
 </body>
 </html>
 EOF
