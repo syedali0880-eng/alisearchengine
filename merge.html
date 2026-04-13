@@ -26,7 +26,7 @@ h1 {
     margin-bottom: 10px;
 }
 
-/* MAIN TABLE */
+/* TABLE */
 .main-table {
     width: 100%;
     border-collapse: collapse;
@@ -69,7 +69,7 @@ details summary {
     font-size: 10px;
 }
 
-/* BOX */
+/* DETAILS BOX */
 .details-box {
     margin-top: 5px;
     padding: 5px;
@@ -79,9 +79,9 @@ details summary {
 
 /* HOST LIST */
 .host {
+    display: block;
     font-size: 10px;
     margin-bottom: 2px;
-    display: block;
 }
 
 .section-title {
@@ -115,14 +115,14 @@ EOF
 for file in env_*.json; do
     [ ! -f "$file" ] && continue
 
-    ENV=$(grep '"environment"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
-    STATUS=$(grep '"global_status"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
-    OWNER=$(grep '"owner"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
-    VERSION=$(grep '"version"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
-    REFRESH=$(grep '"timestamp"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
+    ENV=$(grep -oP '"environment"\s*:\s*"\K[^"]+' "$file")
+    STATUS=$(grep -oP '"global_status"\s*:\s*"\K[^"]+' "$file")
+    OWNER=$(grep -oP '"owner"\s*:\s*"\K[^"]+' "$file")
+    VERSION=$(grep -oP '"version"\s*:\s*"\K[^"]+' "$file")
+    REFRESH=$(grep -oP '"timestamp"\s*:\s*"\K[^"]+' "$file")
 
-    PIDS=$(grep '"pid_count"' "$file" | sed 's/[^0-9]//g')
-    DISK_COUNT=$(grep '"disk_alerts"' "$file" | sed 's/[^0-9]//g')
+    PIDS=$(grep -oP '"pid_count"\s*:\s*\K[0-9]+' "$file")
+    DISK_COUNT=$(grep -oP '"disk_alerts"\s*:\s*\K[0-9]+' "$file")
 
     case "$STATUS" in
         HEALTHY)  BADGE_CLASS="ok" ;;
@@ -151,19 +151,20 @@ for file in env_*.json; do
     echo "<div class='section-title'>Disk</div>" >> "$OUT"
 
     awk '/"disk_details"/,/]/' "$file" | grep '{' | while read -r line; do
-        MOUNT=$(echo "$line" | sed 's/.*"mount": "\(.*\)".*/\1/')
-        USAGE=$(echo "$line" | sed 's/.*"usage": "\(.*\)".*/\1/')
+        MOUNT=$(echo "$line" | grep -oP '"mount"\s*:\s*"\K[^"]+')
+        USAGE=$(echo "$line" | grep -oP '"usage"\s*:\s*"\K[^"]+')
         echo "<div class='host'>$MOUNT : $USAGE</div>" >> "$OUT"
     done
 
     ############################################################
-    # BL SERVERS (FINAL FIX)
+    # BL SERVERS (FINAL CLEAN FIX)
     ############################################################
     echo "<div class='section-title'>BL</div>" >> "$OUT"
 
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
-        NAME=$(echo "$line" | sed 's/.*"name": "\(.*\)".*/\1/')
-        ST=$(echo "$line" | sed 's/.*"status": "\(.*\)".*/\1/')
+
+        NAME=$(echo "$line" | grep -oP '"name"\s*:\s*"\K[^"]+')
+        ST=$(echo "$line" | grep -oP '"status"\s*:\s*\K[^,} ]+')
 
         case "$ST" in
             REACHABLE) COLOR="#2ecc71" ;;
@@ -172,6 +173,7 @@ for file in env_*.json; do
         esac
 
         echo "<span class='host' style='color:$COLOR;'>$NAME</span>" >> "$OUT"
+
     done
 
     echo "</div></details></td>" >> "$OUT"
