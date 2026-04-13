@@ -2,10 +2,6 @@
 
 OUT="final_dashboard.html"
 
-###############################################
-# Step 1 — HTML Header
-###############################################
-
 cat <<EOF > "$OUT"
 <!DOCTYPE html>
 <html>
@@ -32,6 +28,8 @@ th { background: #f8f9fa; padding: 10px; text-align: left; }
 td { padding: 10px; border-bottom: 1px solid #eee; }
 .crit-row { background: #fff1f1; }
 .status { padding: 4px 10px; border-radius: 6px; color: white; font-size: 11px; }
+details { margin-top: 10px; }
+summary { cursor: pointer; font-weight: bold; padding: 5px; }
 </style>
 </head>
 <body>
@@ -39,19 +37,16 @@ td { padding: 10px; border-bottom: 1px solid #eee; }
 <h1>Enterprise Environment Health Dashboard</h1>
 EOF
 
-###############################################
-# Step 2 — Loop Through All JSON Files
-###############################################
-
 for file in env_*.json; do
     [ ! -f "$file" ] && continue
 
-    # Extract simple fields
     ENV=$(grep '"environment"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     STATUS=$(grep '"global_status"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
     ORCH=$(grep '"orchestrator"' "$file" | sed 's/.*: "\(.*\)".*/\1/')
-    PIDS=$(grep '"pid_count"' "$file" | sed 's/.*: \(.*\),*/\1/')
-    DISK_COUNT=$(grep '"disk_alerts"' "$file" | sed 's/.*: \(.*\),*/\1/')
+
+    # FIXED: numeric-only extraction
+    PIDS=$(grep '"pid_count"' "$file" | sed 's/[^0-9]//g')
+    DISK_COUNT=$(grep '"disk_alerts"' "$file" | sed 's/[^0-9]//g')
 
     BADGE_CLASS=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
 
@@ -61,53 +56,53 @@ for file in env_*.json; do
     echo "<table>" >> "$OUT"
     echo "<tr><th>Component</th><th>Node</th><th>Status</th><th>Details</th></tr>" >> "$OUT"
 
-    ###############################################
     # Murex Services
-    ###############################################
     if [ "$PIDS" -gt 10 ]; then
         echo "<tr><td>Murex Services</td><td>$ORCH</td><td><span class='status ok'>RUNNING</span></td><td>$PIDS PIDs</td></tr>" >> "$OUT"
     else
         echo "<tr class='crit-row'><td>Murex Services</td><td>$ORCH</td><td><span class='status crit'>STOPPED</span></td><td>$PIDS PIDs</td></tr>" >> "$OUT"
     fi
 
-    ###############################################
-    # Disk Alerts Summary
-    ###############################################
+    # Disk summary
     if [ "$DISK_COUNT" -gt 0 ]; then
         echo "<tr><td>Disk</td><td>Local</td><td><span class='status warn'>ALERT</span></td><td>$DISK_COUNT partitions above threshold</td></tr>" >> "$OUT"
     else
         echo "<tr><td>Disk</td><td>Local</td><td><span class='status ok'>STABLE</span></td><td>No issues</td></tr>" >> "$OUT"
     fi
 
-    ###############################################
-    # Disk Details (loop without jq)
-    ###############################################
+    echo "</table>" >> "$OUT"
+
+    # Collapsible Disk Details
+    echo "<details><summary>Disk Details ($DISK_COUNT alerts)</summary>" >> "$OUT"
+    echo "<table>" >> "$OUT"
+
     awk '/"disk_details"/,/]/' "$file" | grep '{' | while read -r line; do
-        MOUNT=$(echo "$line" | sed 's/.*"mount": "\(.*\)",.*/\1/')
+        MOUNT=$(echo "$line" | sed 's/.*"mount": "\(.*\)".*/\1/')
         USAGE=$(echo "$line" | sed 's/.*"usage": "\(.*\)".*/\1/')
-        echo "<tr class='crit-row'><td>Disk Detail</td><td>$MOUNT</td><td><span class='status warn'>$USAGE</span></td><td>High usage</td></tr>" >> "$OUT"
+        echo "<tr class='crit-row'><td>$MOUNT</td><td><span class='status warn'>$USAGE</span></td><td>High usage</td></tr>" >> "$OUT"
     done
 
-    ###############################################
-    # BL Servers (loop without jq)
-    ###############################################
+    echo "</table></details>" >> "$OUT"
+
+    # Collapsible BL Servers
+    echo "<details><summary>Business Layer Servers</summary>" >> "$OUT"
+    echo "<table>" >> "$OUT"
+
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
-        NAME=$(echo "$line" | sed 's/.*"name": "\(.*\)",.*/\1/')
+        NAME=$(echo "$line" | sed 's/.*"name": "\(.*\)".*/\1/')
         ST=$(echo "$line" | sed 's/.*"status": "\(.*\)".*/\1/')
 
         if [ "$ST" = "DOWN" ]; then
-            echo "<tr class='crit-row'><td>BL Server</td><td>$NAME</td><td><span class='status crit'>DOWN</span></td><td>SSH timeout</td></tr>" >> "$OUT"
+            echo "<tr class='crit-row'><td>$NAME</td><td><span class='status crit'>DOWN</span></td><td>SSH timeout</td></tr>" >> "$OUT"
         else
-            echo "<tr><td>BL Server</td><td>$NAME</td><td><span class='status ok'>REACHABLE</span></td><td>OK</td></tr>" >> "$OUT"
+            echo "<tr><td>$NAME</td><td><span class='status ok'>REACHABLE</span></td><td>OK</td></tr>" >> "$OUT"
         fi
     done
 
-    echo "</table></div>" >> "$OUT"
-done
+    echo "</table></details>" >> "$OUT"
 
-###############################################
-# Step 4 — Close HTML
-###############################################
+    echo "</div>" >> "$OUT"
+done
 
 cat <<EOF >> "$OUT"
 </body>
