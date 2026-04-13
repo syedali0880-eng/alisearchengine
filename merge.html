@@ -3,7 +3,7 @@
 OUT="final_dashboard.html"
 
 ############################################################
-# HTML + COMPACT CSS
+# HTML + CLEAN COMPACT CSS
 ############################################################
 cat <<EOF > "$OUT"
 <!DOCTYPE html>
@@ -26,7 +26,7 @@ h1 {
     margin-bottom: 10px;
 }
 
-/* TABLE */
+/* MAIN TABLE */
 .main-table {
     width: 100%;
     border-collapse: collapse;
@@ -34,28 +34,19 @@ h1 {
     font-size: 11px;
 }
 
-/* HEADER */
 .main-table th {
     background: #2c3e50;
     color: #fff;
     padding: 4px 6px;
     text-align: left;
-    white-space: nowrap;
 }
 
-/* CELLS */
 .main-table td {
     padding: 3px 6px;
     border-bottom: 1px solid #eee;
-    white-space: nowrap;
+    vertical-align: top;
 }
 
-/* WRAP TIMESTAMP ONLY */
-.main-table td:nth-child(5) {
-    white-space: normal;
-}
-
-/* HOVER */
 .main-table tr:hover {
     background: #f0f5ff;
 }
@@ -73,17 +64,12 @@ h1 {
 .crit { background: #e74c3c; }
 
 /* DETAILS */
-details {
-    display: inline;
-}
-
 details summary {
     cursor: pointer;
     font-size: 10px;
-    color: #2c3e50;
 }
 
-/* DETAILS BOX */
+/* BOX */
 .details-box {
     margin-top: 5px;
     padding: 5px;
@@ -91,16 +77,11 @@ details summary {
     border: 1px solid #ddd;
 }
 
-/* INNER TABLE */
-.details-box table {
-    border-collapse: collapse;
+/* HOST LIST */
+.host {
     font-size: 10px;
-}
-
-.details-box td {
-    padding: 2px 4px;
-    border-bottom: 1px solid #ddd;
-    white-space: nowrap;
+    margin-bottom: 2px;
+    display: block;
 }
 
 .section-title {
@@ -129,7 +110,7 @@ details summary {
 EOF
 
 ############################################################
-# PROCESS FILES
+# PROCESS JSON FILES
 ############################################################
 for file in env_*.json; do
     [ ! -f "$file" ] && continue
@@ -160,29 +141,25 @@ for file in env_*.json; do
     echo "<td>$DISK_COUNT</td>" >> "$OUT"
 
     ############################################################
-    # DETAILS START
+    # DETAILS
     ############################################################
     echo "<td><details><summary>+</summary><div class='details-box'>" >> "$OUT"
 
     ############################################################
-    # DISK DETAILS
+    # DISK
     ############################################################
     echo "<div class='section-title'>Disk</div>" >> "$OUT"
-    echo "<table>" >> "$OUT"
 
     awk '/"disk_details"/,/]/' "$file" | grep '{' | while read -r line; do
         MOUNT=$(echo "$line" | sed 's/.*"mount": "\(.*\)".*/\1/')
         USAGE=$(echo "$line" | sed 's/.*"usage": "\(.*\)".*/\1/')
-        echo "<tr><td>$MOUNT</td><td>$USAGE</td></tr>" >> "$OUT"
+        echo "<div class='host'>$MOUNT : $USAGE</div>" >> "$OUT"
     done
 
-    echo "</table>" >> "$OUT"
-
     ############################################################
-    # BL SERVERS (COLORED HOSTNAMES ONLY)
+    # BL SERVERS (FINAL FIX)
     ############################################################
     echo "<div class='section-title'>BL</div>" >> "$OUT"
-    echo "<div>" >> "$OUT"
 
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
         NAME=$(echo "$line" | sed 's/.*"name": "\(.*\)".*/\1/')
@@ -194,14 +171,9 @@ for file in env_*.json; do
             *)         COLOR="#f39c12" ;;
         esac
 
-        echo "<span style='color:$COLOR; margin-right:6px;'>$NAME</span>" >> "$OUT"
+        echo "<span class='host' style='color:$COLOR;'>$NAME</span>" >> "$OUT"
     done
 
-    echo "</div>" >> "$OUT"
-
-    ############################################################
-    # CLOSE DETAILS
-    ############################################################
     echo "</div></details></td>" >> "$OUT"
     echo "</tr>" >> "$OUT"
 
