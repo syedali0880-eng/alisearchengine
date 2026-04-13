@@ -3,7 +3,7 @@
 OUT="final_dashboard.html"
 
 ############################################################
-# HTML HEADER + MODERN COLORFUL CSS
+# HTML HEADER + MODERN COMPACT CSS
 ############################################################
 cat <<EOF > "$OUT"
 <!DOCTYPE html>
@@ -15,75 +15,74 @@ cat <<EOF > "$OUT"
 
 body {
     font-family: Segoe UI, sans-serif;
-    background: linear-gradient(135deg, #dfe9f3, #ffffff);
-    padding: 25px;
+    background: #f4f7fb;
+    padding: 20px;
 }
 
 h1 {
     text-align: center;
     color: #1f3c88;
-    margin-bottom: 25px;
-    font-size: 28px;
-    letter-spacing: 1px;
+    margin-bottom: 20px;
+    font-size: 26px;
 }
 
 .main-table {
     width: 100%;
     border-collapse: collapse;
     background: #ffffff;
-    border-radius: 12px;
+    border-radius: 10px;
     overflow: hidden;
-    font-size: 14px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    font-size: 13px;
+    table-layout: fixed;     /* FIX COLUMN WIDTHS */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .main-table th {
     background: #1f3c88;
     color: white;
-    padding: 10px;
+    padding: 8px;
     text-align: left;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .main-table td {
-    padding: 10px;
+    padding: 8px;
     border-bottom: 1px solid #e6e6e6;
+    white-space: nowrap;         /* PREVENT EXPANSION */
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .main-table tr:hover {
     background: #eef5ff;
 }
 
-.badge {
-    padding: 5px 12px;
-    border-radius: 12px;
-    color: #ffffff !important;
-    font-size: 12px;
-    font-weight: bold;
+/* STATUS CIRCLES */
+.status-circle {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
     display: inline-block;
-    min-width: 80px;
-    text-align: center;
 }
 
 .ok   { background: #2ecc71 !important; }
 .warn { background: #f39c12 !important; }
 .crit { background: #e74c3c !important; }
 
+/* DETAILS SECTION */
 details summary {
     cursor: pointer;
     color: #1f3c88;
     font-weight: bold;
-    padding: 4px;
-    margin-top: 5px;
+    padding: 4px 0;
 }
 
 details table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 8px;
-    font-size: 13px;
+    margin-top: 6px;
+    font-size: 12px;
     background: #fafafa;
-    border-radius: 8px;
 }
 
 details table th, details table td {
@@ -92,8 +91,8 @@ details table th, details table td {
 }
 
 .section-title {
-    margin-top: 10px;
-    font-size: 14px;
+    margin-top: 8px;
+    font-size: 13px;
     color: #1f3c88;
     font-weight: bold;
 }
@@ -106,14 +105,14 @@ details table th, details table td {
 
 <table class="main-table">
 <tr>
-    <th>Environment</th>
-    <th>Status</th>
-    <th>Owner</th>
-    <th>Version</th>
-    <th>Last Refresh</th>
-    <th>PIDs</th>
-    <th>Disk Alerts</th>
-    <th>Details</th>
+    <th style="width:12%">Environment</th>
+    <th style="width:6%">Status</th>
+    <th style="width:12%">Owner</th>
+    <th style="width:10%">Version</th>
+    <th style="width:15%">Last Refresh</th>
+    <th style="width:6%">PIDs</th>
+    <th style="width:8%">Disk Alerts</th>
+    <th style="width:10%">Details</th>
 </tr>
 EOF
 
@@ -135,7 +134,7 @@ for file in env_*.json; do
     PIDS=$(grep '"pid_count"' "$file" | sed 's/[^0-9]//g')
     DISK_COUNT=$(grep '"disk_alerts"' "$file" | sed 's/[^0-9]//g')
 
-    # FIXED: Map JSON status → CSS class
+    # Map JSON status → CSS class
     case "$STATUS" in
         HEALTHY)  BADGE_CLASS="ok" ;;
         WARNING)  BADGE_CLASS="warn" ;;
@@ -148,7 +147,7 @@ for file in env_*.json; do
     ############################################################
     echo "<tr>" >> "$OUT"
     echo "<td>$ENV</td>" >> "$OUT"
-    echo "<td><span class='badge $BADGE_CLASS'>$STATUS</span></td>" >> "$OUT"
+    echo "<td><span class='status-circle $BADGE_CLASS'></span></td>" >> "$OUT"
     echo "<td>${OWNER:-N/A}</td>" >> "$OUT"
     echo "<td>${VERSION:-N/A}</td>" >> "$OUT"
     echo "<td>$REFRESH</td>" >> "$OUT"
@@ -186,7 +185,7 @@ for file in env_*.json; do
             *)         CLASS="warn" ;;
         esac
 
-        echo "<tr><td>$NAME</td><td><span class='badge $CLASS'>$ST</span></td></tr>" >> "$OUT"
+        echo "<tr><td>$NAME</td><td><span class='status-circle $CLASS'></span></td></tr>" >> "$OUT"
     done
 
     echo "</table>" >> "$OUT"
