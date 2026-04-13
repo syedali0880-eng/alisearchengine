@@ -2,6 +2,9 @@
 
 OUT="final_dashboard.html"
 
+############################################################
+# HTML + COMPACT CSS
+############################################################
 cat <<EOF > "$OUT"
 <!DOCTYPE html>
 <html>
@@ -23,7 +26,7 @@ h1 {
     margin-bottom: 10px;
 }
 
-/* TABLE - AUTO WIDTH BASED ON CONTENT */
+/* TABLE */
 .main-table {
     width: 100%;
     border-collapse: collapse;
@@ -47,9 +50,9 @@ h1 {
     white-space: nowrap;
 }
 
-/* ALLOW WRAP ONLY WHERE NEEDED */
+/* WRAP TIMESTAMP ONLY */
 .main-table td:nth-child(5) {
-    white-space: normal;  /* timestamp wraps */
+    white-space: normal;
 }
 
 /* HOVER */
@@ -69,7 +72,7 @@ h1 {
 .warn { background: #f39c12; }
 .crit { background: #e74c3c; }
 
-/* DETAILS - DO NOT BREAK TABLE WIDTH */
+/* DETAILS */
 details {
     display: inline;
 }
@@ -80,7 +83,7 @@ details summary {
     color: #2c3e50;
 }
 
-/* INNER SECTION */
+/* DETAILS BOX */
 .details-box {
     margin-top: 5px;
     padding: 5px;
@@ -90,12 +93,11 @@ details summary {
 
 /* INNER TABLE */
 .details-box table {
-    width: auto;
     border-collapse: collapse;
     font-size: 10px;
 }
 
-.details-box th, .details-box td {
+.details-box td {
     padding: 2px 4px;
     border-bottom: 1px solid #ddd;
     white-space: nowrap;
@@ -126,6 +128,9 @@ details summary {
 </tr>
 EOF
 
+############################################################
+# PROCESS FILES
+############################################################
 for file in env_*.json; do
     [ ! -f "$file" ] && continue
 
@@ -154,8 +159,14 @@ for file in env_*.json; do
     echo "<td>$PIDS</td>" >> "$OUT"
     echo "<td>$DISK_COUNT</td>" >> "$OUT"
 
+    ############################################################
+    # DETAILS START
+    ############################################################
     echo "<td><details><summary>+</summary><div class='details-box'>" >> "$OUT"
 
+    ############################################################
+    # DISK DETAILS
+    ############################################################
     echo "<div class='section-title'>Disk</div>" >> "$OUT"
     echo "<table>" >> "$OUT"
 
@@ -167,26 +178,38 @@ for file in env_*.json; do
 
     echo "</table>" >> "$OUT"
 
+    ############################################################
+    # BL SERVERS (COLORED HOSTNAMES ONLY)
+    ############################################################
     echo "<div class='section-title'>BL</div>" >> "$OUT"
-    echo "<table>" >> "$OUT"
+    echo "<div>" >> "$OUT"
 
     awk '/"bl_servers"/,/]/' "$file" | grep '{' | while read -r line; do
         NAME=$(echo "$line" | sed 's/.*"name": "\(.*\)".*/\1/')
         ST=$(echo "$line" | sed 's/.*"status": "\(.*\)".*/\1/')
+
         case "$ST" in
-            REACHABLE) CLASS="ok" ;;
-            DOWN)      CLASS="crit" ;;
-            *)         CLASS="warn" ;;
+            REACHABLE) COLOR="#2ecc71" ;;
+            DOWN)      COLOR="#e74c3c" ;;
+            *)         COLOR="#f39c12" ;;
         esac
-        echo "<tr><td>$NAME</td><td><span class='status-circle $CLASS'></span></td></tr>" >> "$OUT"
+
+        echo "<span style='color:$COLOR; margin-right:6px;'>$NAME</span>" >> "$OUT"
     done
 
-    echo "</table>" >> "$OUT"
+    echo "</div>" >> "$OUT"
 
+    ############################################################
+    # CLOSE DETAILS
+    ############################################################
     echo "</div></details></td>" >> "$OUT"
     echo "</tr>" >> "$OUT"
+
 done
 
+############################################################
+# CLOSE HTML
+############################################################
 cat <<EOF >> "$OUT"
 </table>
 </body>
