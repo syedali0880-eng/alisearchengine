@@ -22,8 +22,24 @@ body {
 
 h1 {
     text-align: center;
-    font-size: 18px;
-    margin-bottom: 10px;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin: 10px 0 18px 0;
+    color: #1f3c88;
+    text-transform: uppercase;
+    position: relative;
+}
+
+/* underline accent */
+h1::after {
+    content: "";
+    display: block;
+    width: 120px;
+    height: 3px;
+    margin: 6px auto 0;
+    background: linear-gradient(90deg, #2ecc71, #1f3c88, #e74c3c);
+    border-radius: 5px;
 }
 
 /* TABLE */
