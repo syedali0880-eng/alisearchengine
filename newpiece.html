@@ -1,0 +1,25 @@
+echo "<td>" >> "$OUT"
+
+awk '
+/"owner"[[:space:]]*:/ {inblock=1; next}
+inblock && /\]/ {inblock=0}
+inblock && /{/ {
+    line=$0
+
+    # Extract key
+    if (match(line, /"([^"]+)"[[:space:]]*:/, k)) {
+        key=k[1]
+    }
+
+    # Extract value
+    if (match(line, /:[[:space:]]*"([^"]+)"/, v)) {
+        val=v[1]
+    }
+
+    if (key != "" && val != "") {
+        print "<div style=\"font-size:10px;\">" key ": " val "</div>"
+    }
+}
+' "$file" >> "$OUT"
+
+echo "</td>" >> "$OUT"
