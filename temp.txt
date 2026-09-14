@@ -3,24 +3,18 @@
 CONFIG_FILE="extraction.cfg"
 LOG_FILE="extraction_monitor.log"
 TMP_TABLE="/tmp/rowcount_table_$$.txt"
+TMP_SORT="/tmp/rowcount_sort_$$.txt"
 
 MAIL_TO="ops-team@example.com"
 MAIL_FROM="monitorreport@noextension.com"
 MAIL_SUBJECT="Row Count Anomaly Report"
 
-# ---------------------------------------------------------
-# Logging
-# ---------------------------------------------------------
 log() {
     echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" >> "$LOG_FILE"
 }
 
-# ---------------------------------------------------------
-# Rowcount function (POSIX-safe)
-# ---------------------------------------------------------
 get_rowcount() {
     file="$1"
-
     ext=`echo "$file" | awk -F. '{print $NF}'`
 
     if [ "$ext" = "xls" ]; then
@@ -30,47 +24,53 @@ get_rowcount() {
     fi
 }
 
-# ---------------------------------------------------------
-# Initialize bordered table
-# ---------------------------------------------------------
-echo "+---------------------------+---------------+---------------+--------+" > "$TMP_TABLE"
-echo "| REPORT NAME               | AVERAGE COUNT | TODAY'S COUNT | STATUS |" >> "$TMP_TABLE"
-echo "+---------------------------+---------------+---------------+--------+" >> "$TMP_TABLE"
+# Determine max width for dynamic column sizing
+MAX_WIDTH=25
 
-# ---------------------------------------------------------
-# Process each config line
-# ---------------------------------------------------------
+update_width() {
+    len=`echo "$1" | wc -c`
+    if [ "$len" -gt "$MAX_WIDTH" ]; then
+        MAX_WIDTH="$len"
+    fi
+}
+
+# First pass: scan config and update width
+while IFS='|' read pattern current_dir archive_dir; do
+    case "$pattern" in ""|"#"*) continue ;; esac
+    update_width "$pattern"
+done < "$CONFIG_FILE"
+
+# Build dynamic border
+BORDER="+"
+i=1
+while [ $i -le $MAX_WIDTH ]; do BORDER="${BORDER}-"; i=`expr $i + 1`; done
+BORDER="${BORDER}+---------------+---------------+--------+"
+
+# Header
+echo "$BORDER" > "$TMP_SORT"
+printf "| %-*s | %-13s | %-13s | %-6s |\n" "$MAX_WIDTH" "REPORT NAME" "AVERAGE COUNT" "TODAY'S COUNT" "STATUS" >> "$TMP_SORT"
+echo "$BORDER" >> "$TMP_SORT"
+
 process_line() {
     pattern="$1"
     current_dir="$2"
     archive_dir="$3"
 
-    log "Processing pattern=$pattern"
-
     current_file=`ls -t "$current_dir"/$pattern 2>/dev/null | head -n 1`
-
-    if [ -z "$current_file" ]; then
-        log "No current file found for $pattern"
-        return
-    fi
+    if [ -z "$current_file" ]; then return; fi
 
     current_rows=`get_rowcount "$current_file"`
-
-    if [ -z "$current_rows" ]; then
-        log "Rowcount failed for $current_file"
-        return
-    fi
+    if [ -z "$current_rows" ]; then return; fi
 
     archive_files=`ls -t "$archive_dir"/$pattern 2>/dev/null | head -n 7`
 
     if [ -z "$archive_files" ]; then
-        printf "| %-25s | %-13s | %-13s | %-6s |\n" "$pattern" "$current_rows" "N/A" "NO BL" >> "$TMP_TABLE"
+        printf "1|%-*s|N/A|%s|NO BL\n" "$MAX_WIDTH" "$pattern" "$current_rows" >> "$TMP_SORT"
         return
     fi
 
     sum=0
     count=0
-
     for f in $archive_files; do
         rc=`get_rowcount "$f"`
         if [ -n "$rc" ]; then
@@ -80,7 +80,7 @@ process_line() {
     done
 
     if [ "$count" -eq 0 ]; then
-        printf "| %-25s | %-13s | %-13s | %-6s |\n" "$pattern" "$current_rows" "N/A" "NO BL" >> "$TMP_TABLE"
+        printf "1|%-*s|N/A|%s|NO BL\n" "$MAX_WIDTH" "$pattern" "$current_rows" >> "$TMP_SORT"
         return
     fi
 
@@ -88,36 +88,38 @@ process_line() {
     threshold=`expr $avg \* 80 / 100`
 
     if [ "$current_rows" -lt "$threshold" ]; then
-        status="ALERT"
+        status="[ALERT]"
+        sortkey=0
     else
-        status="OK"
+        status="[OK]"
+        sortkey=1
     fi
 
-    printf "| %-25s | %-13s | %-13s | %-6s |\n" "$pattern" "$avg" "$current_rows" "$status" >> "$TMP_TABLE"
+    printf "%s|%-*s|%s|%s|%s\n" "$sortkey" "$MAX_WIDTH" "$pattern" "$avg" "$current_rows" "$status" >> "$TMP_SORT"
 }
 
-# ---------------------------------------------------------
-# Main
-# ---------------------------------------------------------
-log "===== Script started ====="
-
-if [ ! -f "$CONFIG_FILE" ]; then
-    log "Config file missing: $CONFIG_FILE"
-    exit 1
-fi
-
+# Second pass: process lines
 while IFS='|' read pattern current_dir archive_dir; do
-    case "$pattern" in
-        ""|"#"*) continue ;;
-    esac
+    case "$pattern" in ""|"#"*) continue ;; esac
     process_line "$pattern" "$current_dir" "$archive_dir"
 done < "$CONFIG_FILE"
 
-echo "+---------------------------+---------------+---------------+--------+" >> "$TMP_TABLE"
+# Sort ALERT first
+sort -n "$TMP_SORT" | awk -F"|" '
+BEGIN { }
+{
+    if (NR == 1 || NR == 2) {
+        print $0
+    } else {
+        printf "| %-s | %-13s | %-13s | %-6s |\n", $2, $3, $4, $5
+    }
+}
+' > "$TMP_TABLE"
 
-# ---------------------------------------------------------
-# Send plain-text email (always works)
-# ---------------------------------------------------------
+# Add final border
+echo "$BORDER" >> "$TMP_TABLE"
+
+# Send email
 (
     echo "From: $MAIL_FROM"
     echo "To: $MAIL_TO"
@@ -129,6 +131,4 @@ echo "+---------------------------+---------------+---------------+--------+" >>
     cat "$TMP_TABLE"
 ) | /usr/sbin/sendmail -t
 
-rm -f "$TMP_TABLE"
-
-log "===== Script completed ====="
+rm -f "$TMP_TABLE" "$TMP_SORT"
