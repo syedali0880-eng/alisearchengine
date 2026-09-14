@@ -5,7 +5,7 @@ LOG_FILE="extraction_monitor.log"
 TMP_TABLE="/tmp/rowcount_table_$$.txt"
 
 MAIL_TO="ops-team@example.com"
-MAIL_FROM="monitor@example.com"
+MAIL_FROM="monitorreport@noextension.com"
 MAIL_SUBJECT="Row Count Anomaly Report"
 
 # ---------------------------------------------------------
@@ -21,7 +21,6 @@ log() {
 get_rowcount() {
     file="$1"
 
-    # Extract extension safely
     ext=`echo "$file" | awk -F. '{print $NF}'`
 
     if [ "$ext" = "xls" ]; then
@@ -32,10 +31,11 @@ get_rowcount() {
 }
 
 # ---------------------------------------------------------
-# Initialize plain-text table
+# Initialize bordered table
 # ---------------------------------------------------------
-echo "REPORT NAME                 | AVERAGE COUNT | TODAY'S COUNT | STATUS" > "$TMP_TABLE"
-echo "-----------------------------------------------------------------------" >> "$TMP_TABLE"
+echo "+---------------------------+---------------+---------------+--------+" > "$TMP_TABLE"
+echo "| REPORT NAME               | AVERAGE COUNT | TODAY'S COUNT | STATUS |" >> "$TMP_TABLE"
+echo "+---------------------------+---------------+---------------+--------+" >> "$TMP_TABLE"
 
 # ---------------------------------------------------------
 # Process each config line
@@ -47,7 +47,6 @@ process_line() {
 
     log "Processing pattern=$pattern"
 
-    # Find newest current file
     current_file=`ls -t "$current_dir"/$pattern 2>/dev/null | head -n 1`
 
     if [ -z "$current_file" ]; then
@@ -62,15 +61,10 @@ process_line() {
         return
     fi
 
-    log "Current rows: $current_rows"
-
-    # Get last 7 archive files
     archive_files=`ls -t "$archive_dir"/$pattern 2>/dev/null | head -n 7`
 
     if [ -z "$archive_files" ]; then
-        log "No archive files found for $pattern"
-
-        printf "%-25s | %-13s | %-13s | %s\n" "$pattern" "$current_rows" "N/A" "NO BASELINE" >> "$TMP_TABLE"
+        printf "| %-25s | %-13s | %-13s | %-6s |\n" "$pattern" "$current_rows" "N/A" "NO BL" >> "$TMP_TABLE"
         return
     fi
 
@@ -82,21 +76,16 @@ process_line() {
         if [ -n "$rc" ]; then
             sum=`expr $sum + $rc`
             count=`expr $count + 1`
-            log "Archive $f rows=$rc"
         fi
     done
 
     if [ "$count" -eq 0 ]; then
-        log "No valid archive rowcounts"
-
-        printf "%-25s | %-13s | %-13s | %s\n" "$pattern" "$current_rows" "N/A" "NO BASELINE" >> "$TMP_TABLE"
+        printf "| %-25s | %-13s | %-13s | %-6s |\n" "$pattern" "$current_rows" "N/A" "NO BL" >> "$TMP_TABLE"
         return
     fi
 
     avg=`expr $sum / $count`
     threshold=`expr $avg \* 80 / 100`
-
-    log "Average=$avg Threshold=$threshold"
 
     if [ "$current_rows" -lt "$threshold" ]; then
         status="ALERT"
@@ -104,7 +93,7 @@ process_line() {
         status="OK"
     fi
 
-    printf "%-25s | %-13s | %-13s | %s\n" "$pattern" "$avg" "$current_rows" "$status" >> "$TMP_TABLE"
+    printf "| %-25s | %-13s | %-13s | %-6s |\n" "$pattern" "$avg" "$current_rows" "$status" >> "$TMP_TABLE"
 }
 
 # ---------------------------------------------------------
@@ -117,7 +106,6 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Read config file
 while IFS='|' read pattern current_dir archive_dir; do
     case "$pattern" in
         ""|"#"*) continue ;;
@@ -125,8 +113,10 @@ while IFS='|' read pattern current_dir archive_dir; do
     process_line "$pattern" "$current_dir" "$archive_dir"
 done < "$CONFIG_FILE"
 
+echo "+---------------------------+---------------+---------------+--------+" >> "$TMP_TABLE"
+
 # ---------------------------------------------------------
-# Send email (plain text always works)
+# Send plain-text email (always works)
 # ---------------------------------------------------------
 (
     echo "From: $MAIL_FROM"
