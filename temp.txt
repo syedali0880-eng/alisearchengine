@@ -1,0 +1,16 @@
+BOUNDARY="=====MYHTMLBOUNDARY$$====="
+
+(
+    echo "From: $MAIL_FROM"
+    echo "To: $MAIL_TO"
+    echo "Subject: $MAIL_SUBJECT"
+    echo "MIME-Version: 1.0"
+    echo "Content-Type: multipart/alternative; boundary=\"$BOUNDARY\""
+    echo ""
+    echo "--$BOUNDARY"
+    echo "Content-Type: text/html; charset=UTF-8"
+    echo "Content-Transfer-Encoding: 8bit"
+    echo ""
+    cat "$TMP_HTML"
+    echo ""
+    echo "--$BOUNDARY--"
