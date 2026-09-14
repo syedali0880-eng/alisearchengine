@@ -14,3 +14,4 @@ BOUNDARY="=====MYHTMLBOUNDARY$$====="
     cat "$TMP_HTML"
     echo ""
     echo "--$BOUNDARY--"
+) | /usr/sbin/sendmail -t
