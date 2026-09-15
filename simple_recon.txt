@@ -4,7 +4,7 @@ CONFIG_FILE="extraction.cfg"
 LOG_FILE="extraction_monitor.log"
 TMP_HTML="/tmp/rowcount_report_$$.html"
 
-MAIL_TO="ops-team@example.com"
+MAIL_TO="mohamed.s.ali@sab.com"
 MAIL_FROM="monitor@example.com"
 MAIL_SUBJECT="Row Count Anomaly Report"
 
@@ -12,11 +12,11 @@ MAIL_SUBJECT="Row Count Anomaly Report"
 # Logging
 # ---------------------------------------------------------
 log() {
-    echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" >> "$LOG_FILE"
+    echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" | tee -a "$LOG_FILE"
 }
 
 # ---------------------------------------------------------
-# Rowcount function (POSIX-safe)
+# Rowcount function 
 # ---------------------------------------------------------
 get_rowcount() {
     file="$1"
@@ -46,7 +46,7 @@ th { background-color: #f2f2f2; }
 </style>
 </head>
 <body>
-<h2>Row Count Anomaly Report</h2>
+<h2>Row Count Verification Report</h2>
 <table>
 <tr>
 <th>Pattern</th>
@@ -189,7 +189,6 @@ if grep -q "ALERT" "$TMP_HTML" || grep -q "No baseline" "$TMP_HTML"; then
     log "Sending email alert"
 
     (
-        echo "From: $MAIL_FROM"
         echo "To: $MAIL_TO"
         echo "Subject: $MAIL_SUBJECT"
         echo "Content-Type: text/html"
