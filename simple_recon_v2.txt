@@ -4,7 +4,7 @@
 # Mandatory parameter: group name
 # ---------------------------------------------------------
 if [ $# -ne 1 ]; then
-    echo "Usage: $0 <groupname>"
+    echo "Usage: $0 <GROUP_NAME>"
     exit 1
 fi
 
@@ -18,10 +18,16 @@ MAIL_TO="mohamed.s.ali@sab.com"
 MAIL_FROM="monitor@example.com"
 MAIL_SUBJECT="Row Count Anomaly Report – $GROUP"
 
+# ---------------------------------------------------------
+# Logging
+# ---------------------------------------------------------
 log() {
     echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" | tee -a "$LOG_FILE"
 }
 
+# ---------------------------------------------------------
+# Rowcount function 
+# ---------------------------------------------------------
 get_rowcount() {
     file="$1"
     ext=`echo "$file" | awk -F. '{print $NF}'`
@@ -61,15 +67,13 @@ th { background-color: #f2f2f2; }
 </tr>
 EOF
 
+# ---------------------------------------------------------
+# Process each config line
+# ---------------------------------------------------------
 process_line() {
-    pattern="$1"
-    current_dir="$2"
-    archive_dir="$3"
-
-    # Remove leading/trailing spaces around fields
-    pattern=`echo "$pattern" | sed 's/^ *//;s/ *$//'`
-    current_dir=`echo "$current_dir" | sed 's/^ *//;s/ *$//'`
-    archive_dir=`echo "$archive_dir" | sed 's/^ *//;s/ *$//'`
+    pattern=`echo "$1" | sed 's/^ *//;s/ *$//'`
+    current_dir=`echo "$2" | sed 's/^ *//;s/ *$//'`
+    archive_dir=`echo "$3" | sed 's/^ *//;s/ *$//'`
 
     log "Processing pattern=$pattern"
 
@@ -167,9 +171,11 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 FOUND_GROUP=0
+PROCESSED_ANY=0
 
-while IFS='|' read col1 col2 col3; do
+while IFS=';' read col1 col2 col3; do
 
+    # Trim spaces
     line=`echo "$col1" | sed 's/^ *//;s/ *$//'`
 
     case "$line" in
@@ -189,9 +195,21 @@ while IFS='|' read col1 col2 col3; do
 
     if [ "$FOUND_GROUP" -eq 1 ]; then
         process_line "$col1" "$col2" "$col3"
+        PROCESSED_ANY=1
     fi
 
 done < "$CONFIG_FILE"
+
+if [ "$FOUND_GROUP" -eq 0 ]; then
+    log "ERROR: Group '$GROUP' not found in config file."
+    echo "ERROR: Group '$GROUP' not found in config file."
+    rm -f "$TMP_HTML"
+    exit 1
+fi
+
+if [ "$PROCESSED_ANY" -eq 0 ]; then
+    log "WARNING: Group '$GROUP' found but contains no valid entries."
+fi
 
 cat >> "$TMP_HTML" <<EOF
 </table>
