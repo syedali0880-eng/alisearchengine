@@ -1,0 +1,217 @@
+#!/bin/sh
+
+# ---------------------------------------------------------
+# Mandatory parameter: group name
+# ---------------------------------------------------------
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <groupname>"
+    exit 1
+fi
+
+GROUP="$1"
+
+CONFIG_FILE="extraction.cfg"
+LOG_FILE="extraction_monitor.log"
+TMP_HTML="/tmp/rowcount_report_$$.html"
+
+MAIL_TO="mohamed.s.ali@sab.com"
+MAIL_FROM="monitor@example.com"
+MAIL_SUBJECT="Row Count Anomaly Report – $GROUP"
+
+log() {
+    echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" | tee -a "$LOG_FILE"
+}
+
+get_rowcount() {
+    file="$1"
+    ext=`echo "$file" | awk -F. '{print $NF}'`
+
+    if [ "$ext" = "xls" ]; then
+        grep -c '<Row ' "$file" 2>/dev/null
+    else
+        wc -l < "$file" 2>/dev/null
+    fi
+}
+
+# ---------------------------------------------------------
+# Initialize HTML report
+# ---------------------------------------------------------
+cat > "$TMP_HTML" <<EOF
+<html>
+<head>
+<style>
+body { font-family: Arial; font-size: 12px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ccc; padding: 6px; }
+th { background-color: #f2f2f2; }
+.bad { background-color: #ffdddd; }
+</style>
+</head>
+<body>
+<h2>Row Count Verification Report – $GROUP</h2>
+<table>
+<tr>
+<th>Pattern</th>
+<th>Current File</th>
+<th>Current Rows</th>
+<th>Average (Last 7)</th>
+<th>Threshold</th>
+<th>Status</th>
+<th>Comment</th>
+</tr>
+EOF
+
+process_line() {
+    pattern="$1"
+    current_dir="$2"
+    archive_dir="$3"
+
+    # Remove leading/trailing spaces around fields
+    pattern=`echo "$pattern" | sed 's/^ *//;s/ *$//'`
+    current_dir=`echo "$current_dir" | sed 's/^ *//;s/ *$//'`
+    archive_dir=`echo "$archive_dir" | sed 's/^ *//;s/ *$//'`
+
+    log "Processing pattern=$pattern"
+
+    current_file=`ls -t "$current_dir"/$pattern 2>/dev/null | head -n 1`
+    if [ -z "$current_file" ]; then
+        log "No current file found for $pattern"
+        return
+    fi
+
+    current_rows=`get_rowcount "$current_file"`
+    if [ -z "$current_rows" ]; then
+        log "Rowcount failed for $current_file"
+        return
+    fi
+
+    archive_files=`ls -t "$archive_dir"/$pattern 2>/dev/null | head -n 7`
+
+    if [ -z "$archive_files" ]; then
+        log "No archive files found for $pattern"
+        cat >> "$TMP_HTML" <<EOF
+<tr class="bad">
+<td>$pattern</td>
+<td>$current_file</td>
+<td>$current_rows</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>No baseline</td>
+<td>No archive files</td>
+</tr>
+EOF
+        return
+    fi
+
+    sum=0
+    count=0
+    for f in $archive_files; do
+        rc=`get_rowcount "$f"`
+        if [ -n "$rc" ]; then
+            sum=`expr $sum + $rc`
+            count=`expr $count + 1`
+            log "Archive $f rows=$rc"
+        fi
+    done
+
+    if [ "$count" -eq 0 ]; then
+        log "No valid archive rowcounts"
+        cat >> "$TMP_HTML" <<EOF
+<tr class="bad">
+<td>$pattern</td>
+<td>$current_file</td>
+<td>$current_rows</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>No baseline</td>
+<td>All archive rowcounts failed</td>
+</tr>
+EOF
+        return
+    fi
+
+    avg=`expr $sum / $count`
+    threshold=`expr $avg \* 80 / 100`
+
+    if [ "$current_rows" -lt "$threshold" ]; then
+        status="ALERT"
+        comment="Below threshold"
+        rowclass="bad"
+    else
+        status="OK"
+        comment="Within expected range"
+        rowclass=""
+    fi
+
+    cat >> "$TMP_HTML" <<EOF
+<tr class="$rowclass">
+<td>$pattern</td>
+<td>$current_file</td>
+<td>$current_rows</td>
+<td>$avg</td>
+<td>$threshold</td>
+<td>$status</td>
+<td>$comment</td>
+</tr>
+EOF
+}
+
+# ---------------------------------------------------------
+# Main
+# ---------------------------------------------------------
+log "===== Script started for group $GROUP ====="
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    log "Config file missing: $CONFIG_FILE"
+    exit 1
+fi
+
+FOUND_GROUP=0
+
+while IFS='|' read col1 col2 col3; do
+
+    line=`echo "$col1" | sed 's/^ *//;s/ *$//'`
+
+    case "$line" in
+        \#*)
+            tag=`echo "$line" | sed 's/#//'`
+            if [ "$tag" = "$GROUP" ]; then
+                FOUND_GROUP=1
+                log "Group $GROUP found. Starting processing."
+            else
+                if [ "$FOUND_GROUP" -eq 1 ]; then
+                    break
+                fi
+            fi
+            continue
+            ;;
+    esac
+
+    if [ "$FOUND_GROUP" -eq 1 ]; then
+        process_line "$col1" "$col2" "$col3"
+    fi
+
+done < "$CONFIG_FILE"
+
+cat >> "$TMP_HTML" <<EOF
+</table>
+</body>
+</html>
+EOF
+
+if grep -q "ALERT" "$TMP_HTML" || grep -q "No baseline" "$TMP_HTML"; then
+    log "Sending email alert"
+    (
+        echo "To: $MAIL_TO"
+        echo "Subject: $MAIL_SUBJECT"
+        echo "Content-Type: text/html"
+        echo
+        cat "$TMP_HTML"
+    ) | /usr/sbin/sendmail -t
+else
+    log "No anomalies detected"
+fi
+
+rm -f "$TMP_HTML"
+
+log "===== Script completed ====="
