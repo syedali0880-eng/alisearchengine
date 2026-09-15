@@ -12,22 +12,16 @@ GROUP="$1"
 
 CONFIG_FILE="extraction.cfg"
 LOG_FILE="extraction_monitor.log"
-TMP_HTML="/tmp/rowcount_report_$$.html"
+TMP_HTML="./rowcount_report_$$.html"
 
 MAIL_TO="mohamed.s.ali@sab.com"
 MAIL_FROM="monitor@example.com"
 MAIL_SUBJECT="Row Count Anomaly Report – $GROUP"
 
-# ---------------------------------------------------------
-# Logging
-# ---------------------------------------------------------
 log() {
     echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" | tee -a "$LOG_FILE"
 }
 
-# ---------------------------------------------------------
-# Rowcount function 
-# ---------------------------------------------------------
 get_rowcount() {
     file="$1"
     ext=`echo "$file" | awk -F. '{print $NF}'`
@@ -67,29 +61,31 @@ th { background-color: #f2f2f2; }
 </tr>
 EOF
 
-# ---------------------------------------------------------
-# Process each config line
-# ---------------------------------------------------------
 process_line() {
-    pattern=`echo "$1" | sed 's/^ *//;s/ *$//'`
-    current_dir=`echo "$2" | sed 's/^ *//;s/ *$//'`
-    archive_dir=`echo "$3" | sed 's/^ *//;s/ *$//'`
+    # Trim spaces around fields
+    pattern=$(echo "$1" | sed 's/^ *//;s/ *$//')
+    current_dir=$(echo "$2" | sed 's/^ *//;s/ *$//')
+    archive_dir=$(echo "$3" | sed 's/^ *//;s/ *$//')
+
+    # Remove internal spaces (if any)
+    pattern=$(echo "$pattern" | tr -d ' ')
 
     log "Processing pattern=$pattern"
 
-    current_file=`ls -t "$current_dir"/$pattern 2>/dev/null | head -n 1`
+    current_file=$(ls -t "$current_dir"/$pattern 2>/dev/null | head -n 1)
+
     if [ -z "$current_file" ]; then
         log "No current file found for $pattern"
         return
     fi
 
-    current_rows=`get_rowcount "$current_file"`
+    current_rows=$(get_rowcount "$current_file")
     if [ -z "$current_rows" ]; then
         log "Rowcount failed for $current_file"
         return
     fi
 
-    archive_files=`ls -t "$archive_dir"/$pattern 2>/dev/null | head -n 7`
+    archive_files=$(ls -t "$archive_dir"/$pattern 2>/dev/null | head -n 7)
 
     if [ -z "$archive_files" ]; then
         log "No archive files found for $pattern"
@@ -110,10 +106,10 @@ EOF
     sum=0
     count=0
     for f in $archive_files; do
-        rc=`get_rowcount "$f"`
+        rc=$(get_rowcount "$f")
         if [ -n "$rc" ]; then
-            sum=`expr $sum + $rc`
-            count=`expr $count + 1`
+            sum=$(expr $sum + $rc)
+            count=$(expr $count + 1)
             log "Archive $f rows=$rc"
         fi
     done
@@ -134,8 +130,8 @@ EOF
         return
     fi
 
-    avg=`expr $sum / $count`
-    threshold=`expr $avg \* 80 / 100`
+    avg=$(expr $sum / $count)
+    threshold=$(expr $avg \* 80 / 100)
 
     if [ "$current_rows" -lt "$threshold" ]; then
         status="ALERT"
@@ -173,14 +169,14 @@ fi
 FOUND_GROUP=0
 PROCESSED_ANY=0
 
-while IFS=';' read col1 col2 col3; do
+while IFS='|' read col1 col2 col3; do
 
     # Trim spaces
-    line=`echo "$col1" | sed 's/^ *//;s/ *$//'`
+    line=$(echo "$col1" | sed 's/^ *//;s/ *$//')
 
     case "$line" in
         \#*)
-            tag=`echo "$line" | sed 's/#//'`
+            tag=$(echo "$line" | sed 's/#//')
             if [ "$tag" = "$GROUP" ]; then
                 FOUND_GROUP=1
                 log "Group $GROUP found. Starting processing."
@@ -205,10 +201,6 @@ if [ "$FOUND_GROUP" -eq 0 ]; then
     echo "ERROR: Group '$GROUP' not found in config file."
     rm -f "$TMP_HTML"
     exit 1
-fi
-
-if [ "$PROCESSED_ANY" -eq 0 ]; then
-    log "WARNING: Group '$GROUP' found but contains no valid entries."
 fi
 
 cat >> "$TMP_HTML" <<EOF
