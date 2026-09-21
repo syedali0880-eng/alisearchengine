@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 ##############################################################################
 # Script Name : generic_sftp.sh
@@ -45,6 +45,7 @@ log_msg "======================================================="
 log_msg "Script Started"
 log_msg "Input Pattern : ${INPUT_PATTERN}"
 log_msg "Config File   : ${CONFIG_FILE}"
+log_msg "Log File      : ${LOG_FILE}"
 log_msg "======================================================="
 
 CONFIG_FOUND="N"
@@ -54,16 +55,12 @@ CONFIG_FOUND="N"
 ###########################################################################
 while IFS='|' read -r CFG_PATTERN SOURCE_DIR DEST_SERVER DEST_USER DEST_DIR
 do
-
-    # Skip blank lines
     [ -z "${CFG_PATTERN}" ] && continue
 
-    # Skip comments
     case "${CFG_PATTERN}" in
         \#*) continue ;;
     esac
 
-    # Trim spaces
     CFG_PATTERN=$(echo "${CFG_PATTERN}" | xargs)
     SOURCE_DIR=$(echo "${SOURCE_DIR}" | xargs)
     DEST_SERVER=$(echo "${DEST_SERVER}" | xargs)
@@ -106,7 +103,6 @@ do
     #######################################################################
     echo "${FILE_LIST}" | while read FILE_PATH
     do
-
         [ -z "${FILE_PATH}" ] && continue
 
         FILE_NAME=$(basename "${FILE_PATH}")
@@ -122,12 +118,16 @@ put ${FILE_PATH}
 bye
 EOF
 
-        sftp "${DEST_USER}@${DEST_SERVER}" \
-            < "${SFTP_CMD_FILE}" \
-            > "${SFTP_OUT_FILE}" 2>&1
+        ###################################################################
+        # SFTP with host authenticity disabled
+        ###################################################################
+        sftp -o StrictHostKeyChecking=no \
+             -o UserKnownHostsFile=/dev/null \
+             "${DEST_USER}@${DEST_SERVER}" \
+             < "${SFTP_CMD_FILE}" \
+             > "${SFTP_OUT_FILE}" 2>&1
 
         RC=$?
-
         SFTP_OUTPUT=$(cat "${SFTP_OUT_FILE}")
 
         echo "${SFTP_OUTPUT}" >> "${LOG_FILE}"
@@ -135,42 +135,14 @@ EOF
         rm -f "${SFTP_CMD_FILE}" "${SFTP_OUT_FILE}"
 
         ###################################################################
-        # Error Handling
+        # Unified Error Handling (single grep + RC check)
         ###################################################################
-        if [ ${RC} -ne 0 ]
+        if [ ${RC} -ne 0 ] || echo "${SFTP_OUTPUT}" | grep -Eqi \
+            "Permission denied|remote open|No such file|no such file or directory|Couldn't|Failure"
         then
-            log_msg "FAILURE : SFTP exited with RC=${RC}"
-            continue
-        fi
-
-        if echo "${SFTP_OUTPUT}" | grep -qi "Permission denied"
-        then
-            log_msg "FAILURE : Permission denied on remote folder"
-            continue
-        fi
-
-        if echo "${SFTP_OUTPUT}" | grep -qi "remote open"
-        then
-            log_msg "FAILURE : Remote file open failed"
-            continue
-        fi
-
-        if echo "${SFTP_OUTPUT}" | grep -qi "No such file"
-        then
-            log_msg "FAILURE : Remote directory does not exist"
-            continue
-        fi
-
-        if echo "${SFTP_OUTPUT}" | grep -qi "Couldn't"
-        then
-            log_msg "FAILURE : SFTP reported an error"
-            continue
-        fi
-
-        if echo "${SFTP_OUTPUT}" | grep -qi "Failure"
-        then
-            log_msg "FAILURE : Transfer failed"
-            continue
+            log_msg "FAILURE : SFTP transfer failed"
+            log_msg "Error Output : ${SFTP_OUTPUT}"
+            exit 1
         fi
 
         log_msg "SUCCESS : ${FILE_NAME} transferred successfully"
@@ -185,6 +157,7 @@ done < "${CONFIG_FILE}"
 if [ "${CONFIG_FOUND}" = "N" ]
 then
     log_msg "No configuration found for pattern ${INPUT_PATTERN}"
+    exit 1
 fi
 
 ###########################################################################
@@ -192,6 +165,7 @@ fi
 ###########################################################################
 log_msg "======================================================="
 log_msg "Script Completed"
+log_msg "Log File : ${LOG_FILE}"
 log_msg "======================================================="
 
 exit 0
