@@ -1,0 +1,197 @@
+#!/bin/bash
+
+##############################################################################
+# Script Name : generic_sftp.sh
+# Usage       : ./generic_sftp.sh "ABC_*"
+##############################################################################
+
+SCRIPT_NAME=$(basename "$0" .sh)
+TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
+
+SCRIPT_DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
+
+CONFIG_FILE="${SCRIPT_DIR}/sftp_config.cfg"
+LOG_FILE="${SCRIPT_DIR}/${SCRIPT_NAME}_${TIMESTAMP}.log"
+
+###########################################################################
+# Logging Function
+###########################################################################
+log_msg()
+{
+    echo "$(date '+%Y-%m-%d %H:%M:%S') : $*" | tee -a "${LOG_FILE}"
+}
+
+###########################################################################
+# Validate Input
+###########################################################################
+if [ $# -ne 1 ]
+then
+    echo "Usage: $0 <pattern>"
+    exit 1
+fi
+
+INPUT_PATTERN="$1"
+
+if [ ! -f "${CONFIG_FILE}" ]
+then
+    echo "Config file not found : ${CONFIG_FILE}"
+    exit 1
+fi
+
+###########################################################################
+# Start Logging
+###########################################################################
+log_msg "======================================================="
+log_msg "Script Started"
+log_msg "Input Pattern : ${INPUT_PATTERN}"
+log_msg "Config File   : ${CONFIG_FILE}"
+log_msg "======================================================="
+
+CONFIG_FOUND="N"
+
+###########################################################################
+# Read Config File
+###########################################################################
+while IFS='|' read -r CFG_PATTERN SOURCE_DIR DEST_SERVER DEST_USER DEST_DIR
+do
+
+    # Skip blank lines
+    [ -z "${CFG_PATTERN}" ] && continue
+
+    # Skip comments
+    case "${CFG_PATTERN}" in
+        \#*) continue ;;
+    esac
+
+    # Trim spaces
+    CFG_PATTERN=$(echo "${CFG_PATTERN}" | xargs)
+    SOURCE_DIR=$(echo "${SOURCE_DIR}" | xargs)
+    DEST_SERVER=$(echo "${DEST_SERVER}" | xargs)
+    DEST_USER=$(echo "${DEST_USER}" | xargs)
+    DEST_DIR=$(echo "${DEST_DIR}" | xargs)
+
+    #######################################################################
+    # Process only matching config entry
+    #######################################################################
+    if [ "${CFG_PATTERN}" != "${INPUT_PATTERN}" ]
+    then
+        continue
+    fi
+
+    CONFIG_FOUND="Y"
+
+    log_msg "-------------------------------------------------------"
+    log_msg "Matching Configuration Found"
+    log_msg "Pattern      : ${CFG_PATTERN}"
+    log_msg "Source Dir   : ${SOURCE_DIR}"
+    log_msg "Dest Server  : ${DEST_SERVER}"
+    log_msg "Dest User    : ${DEST_USER}"
+    log_msg "Dest Dir     : ${DEST_DIR}"
+    log_msg "-------------------------------------------------------"
+
+    #######################################################################
+    # Find Matching Files
+    #######################################################################
+    FILE_LIST=$(find "${SOURCE_DIR}" -maxdepth 1 -type f \
+                -name "${CFG_PATTERN}" 2>/dev/null)
+
+    if [ -z "${FILE_LIST}" ]
+    then
+        log_msg "No files found matching ${CFG_PATTERN}"
+        continue
+    fi
+
+    #######################################################################
+    # Transfer each matching file
+    #######################################################################
+    echo "${FILE_LIST}" | while read FILE_PATH
+    do
+
+        [ -z "${FILE_PATH}" ] && continue
+
+        FILE_NAME=$(basename "${FILE_PATH}")
+
+        log_msg "Processing File : ${FILE_PATH}"
+
+        SFTP_CMD_FILE="/tmp/sftp_${$}.cmd"
+        SFTP_OUT_FILE="/tmp/sftp_${$}.out"
+
+        cat > "${SFTP_CMD_FILE}" << EOF
+cd ${DEST_DIR}
+put ${FILE_PATH}
+bye
+EOF
+
+        sftp "${DEST_USER}@${DEST_SERVER}" \
+            < "${SFTP_CMD_FILE}" \
+            > "${SFTP_OUT_FILE}" 2>&1
+
+        RC=$?
+
+        SFTP_OUTPUT=$(cat "${SFTP_OUT_FILE}")
+
+        echo "${SFTP_OUTPUT}" >> "${LOG_FILE}"
+
+        rm -f "${SFTP_CMD_FILE}" "${SFTP_OUT_FILE}"
+
+        ###################################################################
+        # Error Handling
+        ###################################################################
+        if [ ${RC} -ne 0 ]
+        then
+            log_msg "FAILURE : SFTP exited with RC=${RC}"
+            continue
+        fi
+
+        if echo "${SFTP_OUTPUT}" | grep -qi "Permission denied"
+        then
+            log_msg "FAILURE : Permission denied on remote folder"
+            continue
+        fi
+
+        if echo "${SFTP_OUTPUT}" | grep -qi "remote open"
+        then
+            log_msg "FAILURE : Remote file open failed"
+            continue
+        fi
+
+        if echo "${SFTP_OUTPUT}" | grep -qi "No such file"
+        then
+            log_msg "FAILURE : Remote directory does not exist"
+            continue
+        fi
+
+        if echo "${SFTP_OUTPUT}" | grep -qi "Couldn't"
+        then
+            log_msg "FAILURE : SFTP reported an error"
+            continue
+        fi
+
+        if echo "${SFTP_OUTPUT}" | grep -qi "Failure"
+        then
+            log_msg "FAILURE : Transfer failed"
+            continue
+        fi
+
+        log_msg "SUCCESS : ${FILE_NAME} transferred successfully"
+
+    done
+
+done < "${CONFIG_FILE}"
+
+###########################################################################
+# No Matching Config Entry
+###########################################################################
+if [ "${CONFIG_FOUND}" = "N" ]
+then
+    log_msg "No configuration found for pattern ${INPUT_PATTERN}"
+fi
+
+###########################################################################
+# End Logging
+###########################################################################
+log_msg "======================================================="
+log_msg "Script Completed"
+log_msg "======================================================="
+
+exit 0
