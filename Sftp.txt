@@ -1,0 +1,140 @@
+#!/bin/bash
+
+###############################################################################
+# Script Name : generic_sftp.sh
+# Purpose     : Generic SFTP Transfer Script
+#
+# Usage:
+#   ./generic_sftp.sh ABC_*
+#
+###############################################################################
+
+SCRIPT_NAME=$(basename "$0" .sh)
+TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+
+CONFIG_FILE="${SCRIPT_DIR}/sftp_config.cfg"
+LOG_FILE="${SCRIPT_DIR}/${SCRIPT_NAME}_${TIMESTAMP}.log"
+
+###############################################################################
+# Logging Function
+###############################################################################
+log_msg()
+{
+    echo "$(date '+%Y-%m-%d %H:%M:%S') : $1" | tee -a "${LOG_FILE}"
+}
+
+###############################################################################
+# Validations
+###############################################################################
+if [ $# -ne 1 ]
+then
+    echo "Usage: $0 <file_pattern>"
+    exit 1
+fi
+
+INPUT_PATTERN="$1"
+
+if [ ! -f "${CONFIG_FILE}" ]
+then
+    echo "ERROR: Config file not found: ${CONFIG_FILE}"
+    exit 1
+fi
+
+###############################################################################
+# Start Logging
+###############################################################################
+log_msg "========================================================="
+log_msg "Script Started"
+log_msg "Input Pattern : ${INPUT_PATTERN}"
+log_msg "Config File   : ${CONFIG_FILE}"
+log_msg "Log File      : ${LOG_FILE}"
+log_msg "========================================================="
+
+###############################################################################
+# Read Config File
+###############################################################################
+while IFS='|' read -r CFG_PATTERN SOURCE_DIR DEST_SERVER DEST_USER DEST_DIR
+do
+
+    # Skip blank lines
+    [ -z "${CFG_PATTERN}" ] && continue
+
+    # Skip comments
+    [[ "${CFG_PATTERN}" =~ ^# ]] && continue
+
+    log_msg "Processing Config Entry"
+    log_msg "Config Pattern : ${CFG_PATTERN}"
+    log_msg "Source Dir     : ${SOURCE_DIR}"
+    log_msg "Dest Server    : ${DEST_SERVER}"
+    log_msg "Dest User      : ${DEST_USER}"
+    log_msg "Dest Dir       : ${DEST_DIR}"
+
+    ###########################################################################
+    # Match input pattern with config pattern
+    ###########################################################################
+    if [ "${INPUT_PATTERN}" != "${CFG_PATTERN}" ]
+    then
+        log_msg "Skipping Config Entry. Pattern mismatch."
+        continue
+    fi
+
+    log_msg "Pattern matched."
+
+    ###########################################################################
+    # Find Matching Files
+    ###########################################################################
+    FILE_FOUND="N"
+
+    for FILE_PATH in "${SOURCE_DIR}"/${CFG_PATTERN}
+    do
+
+        [ -f "${FILE_PATH}" ] || continue
+
+        FILE_FOUND="Y"
+
+        FILE_NAME=$(basename "${FILE_PATH}")
+
+        log_msg "Found File : ${FILE_PATH}"
+        log_msg "Starting SFTP Transfer"
+
+        #######################################################################
+        # SFTP Transfer
+        #######################################################################
+        sftp -b - "${DEST_USER}@${DEST_SERVER}" >>"${LOG_FILE}" 2>&1 <<EOF
+cd ${DEST_DIR}
+put ${FILE_PATH}
+bye
+EOF
+
+        RC=$?
+
+        #######################################################################
+        # Check Return Code
+        #######################################################################
+        if [ ${RC} -eq 0 ]
+        then
+            log_msg "SUCCESS : ${FILE_NAME} transferred successfully"
+        else
+            log_msg "FAILURE : ${FILE_NAME} transfer failed"
+            log_msg "Return Code : ${RC}"
+        fi
+
+    done
+
+    if [ "${FILE_FOUND}" = "N" ]
+    then
+        log_msg "No files found in ${SOURCE_DIR} matching ${CFG_PATTERN}"
+    fi
+
+done < "${CONFIG_FILE}"
+
+###############################################################################
+# End Logging
+###############################################################################
+log_msg "========================================================="
+log_msg "Script Completed"
+log_msg "========================================================="
+
+exit 0
