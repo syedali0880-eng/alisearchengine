@@ -1,0 +1,84 @@
+#!/bin/sh
+
+CONFIG_FILE="config.cfg"
+LOG_FILE="recon_check.log"
+
+log() {
+    echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" >> "$LOG_FILE"
+}
+
+# Trim spaces and tabs safely (portable)
+trim() {
+    echo "$1" | sed 's/[ \t]//g'
+}
+
+# Extract numeric value from murex recon file (rowcount=XXXX)
+get_murex_value() {
+    file="$1"
+    val=`grep -i 'rowcount=' "$file" 2>/dev/null | awk -F= '{print $2}'`
+    trim "$val"
+}
+
+# Extract numeric value from hub feedback file (remove spaces/tabs)
+get_hub_value() {
+    file="$1"
+    val=`cat "$file" 2>/dev/null | sed 's/[ \t]//g'`
+    trim "$val"
+}
+
+while IFS='|' read iface murex_file hub_file archive_dir skiprows; do
+
+    case "$iface" in
+        ""|"#"*) continue ;;
+    esac
+
+    log "Processing interface: $iface"
+
+    # Validate files
+    if [ ! -f "$murex_file" ]; then
+        log "Missing murex file: $murex_file"
+        exit 1
+    fi
+
+    if [ ! -f "$hub_file" ]; then
+        log "Missing hub feedback file: $hub_file"
+        exit 1
+    fi
+
+    # Read values
+    murex_val=`get_murex_value "$murex_file"`
+    hub_val=`get_hub_value "$hub_file"`
+
+    if [ -z "$murex_val" ] || [ -z "$hub_val" ]; then
+        log "Failed to extract numeric values"
+        exit 1
+    fi
+
+    # Compute expected difference: murex - (hub + skiprows)
+    diff=`expr $murex_val - $hub_val - $skiprows`
+
+    log "murex=$murex_val hub=$hub_val skiprows=$skiprows diff=$diff"
+
+    if [ "$diff" -ne 0 ]; then
+        log "Validation FAILED for $iface (diff=$diff)"
+        echo "FAILED: $iface diff=$diff"
+        exit 1
+    fi
+
+    # Success → rename files with timestamp and archive
+    ts=`date '+%Y%m%d_%H%M%S'`
+
+    murex_base=`basename "$murex_file"`
+    hub_base=`basename "$hub_file"`
+
+    murex_new="${murex_base%.*}_$ts.${murex_base##*.}"
+    hub_new="${hub_base%.*}_$ts.${hub_base##*.}"
+
+    mv "$murex_file" "$archive_dir/$murex_new"
+    mv "$hub_file" "$archive_dir/$hub_new"
+
+    log "SUCCESS: archived $iface as $murex_new and $hub_new"
+
+done < "$CONFIG_FILE"
+
+echo "All interfaces validated successfully."
