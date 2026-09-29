@@ -3,11 +3,18 @@
 CONFIG_FILE="config.cfg"
 LOG_FILE="recon_check.log"
 
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <INTERFACE_NAME>"
+    exit 1
+fi
+
+TARGET_IFACE="$1"
+
 log() {
     echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" >> "$LOG_FILE"
 }
 
-# Trim spaces and tabs safely (portable)
+# Remove spaces and tabs (portable)
 trim() {
     echo "$1" | sed 's/[ \t]//g'
 }
@@ -19,18 +26,48 @@ get_murex_value() {
     trim "$val"
 }
 
-# Extract numeric value from hub feedback file (remove spaces/tabs)
+# Extract numeric value from hub feedback file
 get_hub_value() {
     file="$1"
     val=`cat "$file" 2>/dev/null | sed 's/[ \t]//g'`
     trim "$val"
 }
 
-while IFS='|' read iface murex_file hub_file archive_dir skiprows; do
+FOUND_SECTION=0
 
-    case "$iface" in
-        ""|"#"*) continue ;;
+while IFS= read -r line; do
+
+    case "$line" in
+        \#*)
+            header="${line#\#}"
+            if [ "$header" = "$TARGET_IFACE" ]; then
+                FOUND_SECTION=1
+                continue
+            fi
+
+            # If we already started processing and hit next #, stop
+            if [ $FOUND_SECTION -eq 1 ]; then
+                break
+            fi
+            ;;
     esac
+
+    # Skip until we find the matching section
+    if [ $FOUND_SECTION -eq 0 ]; then
+        continue
+    fi
+
+    # Stop if empty line
+    if [ -z "$line" ]; then
+        break
+    fi
+
+    # Now process the config line
+    iface=`echo "$line" | awk -F'|' '{print $1}'`
+    murex_file=`echo "$line" | awk -F'|' '{print $2}'`
+    hub_file=`echo "$line" | awk -F'|' '{print $3}'`
+    archive_dir=`echo "$line" | awk -F'|' '{print $4}'`
+    skiprows=`echo "$line" | awk -F'|' '{print $5}'`
 
     log "Processing interface: $iface"
 
@@ -54,7 +91,7 @@ while IFS='|' read iface murex_file hub_file archive_dir skiprows; do
         exit 1
     fi
 
-    # Compute expected difference: murex - (hub + skiprows)
+    # Compute expected difference
     diff=`expr $murex_val - $hub_val - $skiprows`
 
     log "murex=$murex_val hub=$hub_val skiprows=$skiprows diff=$diff"
@@ -81,4 +118,4 @@ while IFS='|' read iface murex_file hub_file archive_dir skiprows; do
 
 done < "$CONFIG_FILE"
 
-echo "All interfaces validated successfully."
+echo "Processing completed for interface: $TARGET_IFACE"
