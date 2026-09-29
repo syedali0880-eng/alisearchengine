@@ -14,19 +14,17 @@ log() {
     echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" >> "$LOG_FILE"
 }
 
-# Extract ONLY digits (removes spaces, tabs, CR, LF, BOM, garbage)
+# Strip everything except digits (CR, LF, tabs, BOM, spaces, garbage)
 digits_only() {
     sed 's/[^0-9]//g' "$1"
 }
 
-# Extract numeric value from murex recon file (rowcount=XXXX)
 get_murex_value() {
     file="$1"
-    val=`grep -i 'rowcount=' "$file" 2>/dev/null | awk -F= '{print $2}' | sed 's/[^0-9]//g'`
+    val=`grep -i 'rowcount=' "$file" | awk -F= '{print $2}' | sed 's/[^0-9]//g'`
     echo "$val"
 }
 
-# Extract numeric value from hub feedback file
 get_hub_value() {
     file="$1"
     val=`digits_only "$file"`
@@ -44,20 +42,14 @@ while IFS= read -r line; do
                 FOUND_SECTION=1
                 continue
             fi
-
             if [ $FOUND_SECTION -eq 1 ]; then
                 break
             fi
             ;;
     esac
 
-    if [ $FOUND_SECTION -eq 0 ]; then
-        continue
-    fi
-
-    if [ -z "$line" ]; then
-        break
-    fi
+    [ $FOUND_SECTION -eq 0 ] && continue
+    [ -z "$line" ] && break
 
     iface=`echo "$line" | awk -F'|' '{print $1}'`
     murex_file=`echo "$line" | awk -F'|' '{print $2}'`
@@ -67,55 +59,34 @@ while IFS= read -r line; do
 
     log "Processing interface: $iface"
 
-    if [ ! -f "$murex_file" ]; then
-        log "Missing murex file: $murex_file"
-        exit 1
-    fi
-
-    if [ ! -f "$hub_file" ]; then
-        log "Missing hub feedback file: $hub_file"
-        exit 1
-    fi
+    [ ! -f "$murex_file" ] && log "Missing murex file" && exit 1
+    [ ! -f "$hub_file" ] && log "Missing hub feedback file" && exit 1
 
     murex_val=`get_murex_value "$murex_file"`
     hub_val=`get_hub_value "$hub_file"`
 
-    # NEW: Validate numeric values BEFORE expr
-    echo "$murex_val" | grep -q '^[0-9][0-9]*$' || {
-        log "ERROR: murex_val is not numeric: '$murex_val'"
-        exit 1
-    }
+    echo "$murex_val" | grep -q '^[0-9][0-9]*$' || { log "Invalid murex_val"; exit 1; }
+    echo "$hub_val" | grep -q '^[0-9][0-9]*$' || { log "Invalid hub_val"; exit 1; }
+    echo "$skiprows" | grep -q '^[0-9][0-9]*$' || { log "Invalid skiprows"; exit 1; }
 
-    echo "$hub_val" | grep -q '^[0-9][0-9]*$' || {
-        log "ERROR: hub_val is not numeric: '$hub_val'"
-        exit 1
-    }
-
-    echo "$skiprows" | grep -q '^[0-9][0-9]*$' || {
-        log "ERROR: skiprows is not numeric: '$skiprows'"
-        exit 1
-    }
-
-    # Perform subtraction
+    # Perform subtraction (expr exit code is ignored)
     diff=`expr $murex_val - $hub_val - $skiprows 2>/dev/null`
-    expr_status=$?
 
-    # NEW: expr failure detection
-    if [ $expr_status -ne 0 ]; then
-        log "ERROR: expr failed — non-integer argument"
-        log "Values: murex='$murex_val' hub='$hub_val' skiprows='$skiprows'"
+    # REAL validation: diff must be numeric
+    echo "$diff" | grep -q '^[0-9-][0-9-]*$' || {
+        log "ERROR: expr produced invalid output"
+        log "Values: murex=$murex_val hub=$hub_val skiprows=$skiprows"
         exit 1
-    fi
+    }
 
     log "murex=$murex_val hub=$hub_val skiprows=$skiprows diff=$diff"
 
     if [ "$diff" -ne 0 ]; then
-        log "Validation FAILED for $iface (diff=$diff)"
-        echo "FAILED: $iface diff=$diff"
+        log "FAILED: diff=$diff"
         exit 1
     fi
 
-    # Success → rename files with timestamp and archive
+    # SUCCESS → rename + archive
     ts=`date '+%Y%m%d_%H%M%S'`
 
     murex_base=`basename "$murex_file"`
