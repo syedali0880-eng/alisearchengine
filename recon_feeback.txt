@@ -80,12 +80,32 @@ while IFS= read -r line; do
     murex_val=`get_murex_value "$murex_file"`
     hub_val=`get_hub_value "$hub_file"`
 
-    if [ -z "$murex_val" ] || [ -z "$hub_val" ]; then
-        log "Failed to extract numeric values"
+    # NEW: Validate numeric values BEFORE expr
+    echo "$murex_val" | grep -q '^[0-9][0-9]*$' || {
+        log "ERROR: murex_val is not numeric: '$murex_val'"
+        exit 1
+    }
+
+    echo "$hub_val" | grep -q '^[0-9][0-9]*$' || {
+        log "ERROR: hub_val is not numeric: '$hub_val'"
+        exit 1
+    }
+
+    echo "$skiprows" | grep -q '^[0-9][0-9]*$' || {
+        log "ERROR: skiprows is not numeric: '$skiprows'"
+        exit 1
+    }
+
+    # Perform subtraction
+    diff=`expr $murex_val - $hub_val - $skiprows 2>/dev/null`
+    expr_status=$?
+
+    # NEW: expr failure detection
+    if [ $expr_status -ne 0 ]; then
+        log "ERROR: expr failed — non-integer argument"
+        log "Values: murex='$murex_val' hub='$hub_val' skiprows='$skiprows'"
         exit 1
     fi
-
-    diff=`expr $murex_val - $hub_val - $skiprows`
 
     log "murex=$murex_val hub=$hub_val skiprows=$skiprows diff=$diff"
 
@@ -95,6 +115,7 @@ while IFS= read -r line; do
         exit 1
     fi
 
+    # Success → rename files with timestamp and archive
     ts=`date '+%Y%m%d_%H%M%S'`
 
     murex_base=`basename "$murex_file"`
