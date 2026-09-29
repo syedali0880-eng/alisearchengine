@@ -14,23 +14,23 @@ log() {
     echo "`date '+%Y-%m-%d %H:%M:%S'` - $*" >> "$LOG_FILE"
 }
 
-# Remove spaces and tabs (portable)
-trim() {
-    echo "$1" | sed 's/[ \t]//g'
+# Extract ONLY digits (removes spaces, tabs, CR, LF, BOM, garbage)
+digits_only() {
+    sed 's/[^0-9]//g' "$1"
 }
 
 # Extract numeric value from murex recon file (rowcount=XXXX)
 get_murex_value() {
     file="$1"
-    val=`grep -i 'rowcount=' "$file" 2>/dev/null | awk -F= '{print $2}'`
-    trim "$val"
+    val=`grep -i 'rowcount=' "$file" 2>/dev/null | awk -F= '{print $2}' | sed 's/[^0-9]//g'`
+    echo "$val"
 }
 
 # Extract numeric value from hub feedback file
 get_hub_value() {
     file="$1"
-    val=`cat "$file" 2>/dev/null | sed 's/[ \t]//g'`
-    trim "$val"
+    val=`digits_only "$file"`
+    echo "$val"
 }
 
 FOUND_SECTION=0
@@ -45,24 +45,20 @@ while IFS= read -r line; do
                 continue
             fi
 
-            # If we already started processing and hit next #, stop
             if [ $FOUND_SECTION -eq 1 ]; then
                 break
             fi
             ;;
     esac
 
-    # Skip until we find the matching section
     if [ $FOUND_SECTION -eq 0 ]; then
         continue
     fi
 
-    # Stop if empty line
     if [ -z "$line" ]; then
         break
     fi
 
-    # Now process the config line
     iface=`echo "$line" | awk -F'|' '{print $1}'`
     murex_file=`echo "$line" | awk -F'|' '{print $2}'`
     hub_file=`echo "$line" | awk -F'|' '{print $3}'`
@@ -71,7 +67,6 @@ while IFS= read -r line; do
 
     log "Processing interface: $iface"
 
-    # Validate files
     if [ ! -f "$murex_file" ]; then
         log "Missing murex file: $murex_file"
         exit 1
@@ -82,7 +77,6 @@ while IFS= read -r line; do
         exit 1
     fi
 
-    # Read values
     murex_val=`get_murex_value "$murex_file"`
     hub_val=`get_hub_value "$hub_file"`
 
@@ -91,7 +85,6 @@ while IFS= read -r line; do
         exit 1
     fi
 
-    # Compute expected difference
     diff=`expr $murex_val - $hub_val - $skiprows`
 
     log "murex=$murex_val hub=$hub_val skiprows=$skiprows diff=$diff"
@@ -102,7 +95,6 @@ while IFS= read -r line; do
         exit 1
     fi
 
-    # Success → rename files with timestamp and archive
     ts=`date '+%Y%m%d_%H%M%S'`
 
     murex_base=`basename "$murex_file"`
